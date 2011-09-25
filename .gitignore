@@ -1,0 +1,4 @@
+*.txt
+routes.rb
+schema.rb
+symfony_index.php
