@@ -1,0 +1,26 @@
+==Redline Framework==
+
+This is my attempt at writing my own web framework. I've been working on it off and on in conjunction with another project. I've looked at or played with most of the popular PHP frameworks out there and find them to be too big or too small. The goal with Redline is to be in the middle. I call it the Goldilocks Principle.
+
+The end goal is to have the following modules:
+* Application
+Request
+Response
+Routing(Mapper)
+View
+Loader (Autoloading & plugin/module management)
+Database
+Orm/ActiveRecord
+AbstractController
+Filesystem wrapper?
+Event manager?
+Cache?
+Locale/I18n?
+Form?
+Validation/Sanitize?
+Config?
+Logging?
+HTTP Client
+Session wrapper?
+Mail?
+Auth (OpenID/Oauth)?
