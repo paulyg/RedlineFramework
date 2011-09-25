@@ -22,188 +22,165 @@
 namespace Redline\Router;
 
 /**
- * Description of class.
+ * Creates a number of routes that conform to generally accepted rules for managing a resource RESTfully.
  *
  * @package RedlineFramework
  */
-class Route implements \RecursiveIterator
+class RestRoute extends BasicRoute
 {
 	/**
-	 * Unique name or identifier of this route
-	 * @var string
-	 */
-	protected $name;
-
-    /**
-	 * Regex patttern that will be used for matching.
-	 * @var string
-	 */
-	protected $pattern;
-
-    /**
-	 * Original path spec, before being converted to a regex pattern.
-	 * @var string
-	 */
-	protected $path;
-
-    /**
-	 * Regex pattern conditions to be applied to the path spec.
+	 * List of valid collection level actions for this resource.
 	 * @var array
 	 */
-	protected $conditions = array();
+	protected $collections = array('index' => 'GET', 'new' => 'POST');
 
     /**
-	 * Default values for the named path segments.
-	 * @var array
+	 * List of valid member level actions for this resource.
+	 * @var string
 	 */
-	protected $default = array();
-
-    /**
-	 * List of HTTP methods this route may be used with.
-	 * @var array
-	 */
-	protected $methods = array();
-
-    /**
-     * Module in which routed controller is located, leave blank for 'app'.
-     * @var string
-     */
-    protected $module;
-
-    /**
-     * Controller class which method to be invoked is located.
-     * @var string
-     */
-    protected $class;
-
-    /**
-     * Action which is to be invoked when route is matched.
-     * @var string
-     */
-    protected $action;
+	protected $members = array('show' => 'GET', 'edit' => 'POST|PUT', 'delete' => 'POST|DELETE', );
 
 	/**
-	 * Children routes which will inherit the path and name as a prefix.
-	 * @var array
+	 * Construct a new RestRoute.
+     *
+	 * @param string $name    Name of the controller to call for all CRUD actions.
+	 * @param array  $options Additional options.
+     * @param Mapper $mapper  Reference back to the mapper for creating subroutes.
 	 */
-	protected $subroutes = array();
-
-	/**
-	 * Object constructor.
-	 * @param string $path URL path specification to match route against.
-	 * @param string $controller_spec Special format indicating module, controller class
-     *                                & action to call.
-	 * @param array  $options Name, method, conditions, and default options.
-	 */
-	public function __construct($path, $controller_spec, array $options = array())
+	public function __construct($name, array $options = array(), $mapper = null)
 	{
-		if (isset($options['path_prefix'])) {
-            $path = $options['path_prefix'] . '/' . $path;
-        }
-
-        if (isset($options['conditions'])) {
-            $this->conditions = $options['conditions'];
-        }
-
-        $this->pattern = $ths->compilePattern($path);
-
-        // The hash char must not be 1st char, so we accept 0 as false below instead of 
-        // using === false
-        if (!strpos($controller_spec, '#')) {
-            throw new Exception("The controller specification '$controller_spec' does not contain a controller class and action seperated by the '#' character.");
-        }
-        list($controller, $action) = explode('#', $controller_spec);
-        
-        // The colon must not be 1st char, se we accept 0 as false again.
-        if (strpos($controller, ':')) {
-            list($module, $controller) = explode(':', $controller);
+		        // Colon must not be 1st char so we accept 0 as false instead of using === false
+        if (strpos($name, ':')) {
+            list($module, $controller) = explode(':', $name);
+            $path = $module . '/' . $controller;
+            $name = $module . '_' . $controller;
         } else {
             $module = '';
+            $path = $controller = $name;
         }
+
+		if (isset($options['path_prefix'])) {
+            $path = trim($options['path_prefix'], '/') . '/' . $path;
+        }
+        
         $this->module = $module;
         $this->controller = $controller;
-        $this->action = $action;
-
-        if (isset($options['name'])) {
-            $name = $options['name'];
-        } else {
-            $name = $controller . "_" . $action;
-            $name = (empty($module)) ? $name : $module . "_" . $name;
-        }
+        $this->path = '/' . $path;
+        $this->conditions = isset($options['conditions']) ? $options['conditions'] : array();
+        $this->defaults = isset($options['defaults']) ? $options['defaults'] : array();
 
         if (isset($options['name_prefix'])) {
             $name = $options['name_prefix'] . '_' . $name;
         }
         $this->name = $name;
 
-        $this->defaults = $options['defaults'];
+        // handle "except" and "only" options
+        if (isset($options['only'])) {
+            foreach ($this->collections as $key => $val) {
+                if (!in_array($key, $options['only'])) {
+                    unset($this->collections[$key];
+                }
+            }
+            foreach ($this->members as $key => $val) {
+                if (!in_array($key, $options['only'])) {
+                    unset($this->members[$key];
+                }
+            }
+        } elseif (isset($options['except'])) {
+            foreach ($options['except'] as $action) {
+                foreach ($this->collections as $key => $val) {
+                    if ($key == $action) {
+                        unset($this->collections[$action];
+                        break 2;
+                    }
+                }
+                foreach ($this->members as $key => $val) {
+                    if ($key == $action) {
+                        unset($this->members[$action];
+                        break 2;
+                    }
+                }
+            }
+        }
+
+        if ($mapper instanceof Mapper) {
+            $this->mapper = $mapper;
+        }
 	}
 
-	/**
-	 * Add a new route underneath this route.
-	 * @param string $path URL path specification to match route against.
-	 * @param string $controller_spec Special format indicating module, controller class
-     *                                & action to call.
-	 * @param array  $options Name, method, conditions, and default options.
-	 */
-	public function add($path, $controller_spec, array $options = array())
-	{
-		$options['name_prefix'] = $this->name;
-		$options['path_prefix'] = $this->path;
-        $options['conditions'] = array_replace($this->conditions, $options['conditions']);
-        $options['defaults'] = array_replace($this->defaults, $options['defaults']);
+    /**
+     * @inheritdoc
+     */
+    public function match($uri_path)
+    {
+        if (parent::match($uri_path) && isset($this->collections['index'])) {
+            $this->action = 'index';
+            return true;
+        }
 
-		$this->subroutes[] = new Route($path, $controller_spec, $options);
-	}
+        $oldpath = $this->path;
+        $this->path .= '/:id';
+        if (parent::match($uri_path) && isset($this->members['show'])) {
+            $this->action = 'show';
+            return true;
+        }
 
-	public function hasChildren()
-	{
-		return !empty($this->subroutes);
-	}
+        $this->path = $oldpath . '/:action';
+        if (parent::match($uri_path) && isset($this->collections[$this->params['action']])) {
+            $this->action = $this->params['action'];
+            return true;
+        }
 
-	public function getChildren()
-	{
-		return $this->subroutes;
-	}
+        $this->path = $oldpath . '/:id/:action';
+        if (parent::match($uri_path) $$ isset($this->members[$this->params['actions']])) {
+            $this->action = $this->params['action'];
+            return true;
+        }
 
+        return false;
+    }
 
-	/**
-	 * Create multiple common routing paths for working with a single entity type.
-     * @param string $name Resource name
-	 * @return type
-	 */
-	public function resource($name)
-	{
-        $path = $this->path . '/' . $name . '/';
-        $id_condition = array(
-            'conditions' => array('id' => '(\d+)'),
-            'method' => 'GET'
-        );
-        $this->subroutes[] = new Route($path, $name . '#index');
-        $this->subroutes[] = new Route($path . '{:id}', $name . '#show', array(
-            'conditions' => array('id' => '(\d+)'),
-            'method' => 'GET'
-        ));
-        $this->subroutes[] = new Route($path . 'new', $name . '#new', array(
-            'method' => 'GET|POST'
-        ));
-        $this->subroutes[] = new Route($path, $name . '#create', array(
-            'method' => 'POST'
-        ));        
-        $this->subroutes[] = new Route($path . 'edit/{:id}', $name . '#edit', array(
-            'conditions' => array('id' => '(\d+)'),
-            'method' => 'GET|POST'
-        ));
-        $this->subroutes[] = new Route($path . '{:id}', $name . '#update', array(
-            'method' => 'PUT'
-        ));
-        $this->subroutes[] = new Route($path . 'delete/{:id}', $name . '#delete', array(
-            'conditions' => array('id' => '(\d+)'),
-            'method' => 'POST'
-        ));
-        $this->subroutes[] = new Route($path . '{:id}', $name . '#delete', array(
-            'conditions' => array('id' => '(\d+)'),
-            'method' => 'DELETE'
-        ));
-	}
+    /**
+     * @inheritdoc
+     */
+    public function build($params)
+    {
+    }
+
+    public function addCollectionMethod($name, $methods = 'GET|POST')
+    {
+        $this->collections[$name] = $methods;
+    }
+
+    public function addMemberMethod($name, $methods = 'GET|POST')
+    {
+        $this->members[$name] = $methods;
+    }
+
+    public function rest($name, array $options = array())
+    {
+        if ($this->mapper) {
+		    $options['name_prefix'] = $this->name;
+		    $options['path_prefix'] = $this->path;
+            $options['conditions'][$this->controller . '_id'] = '(\d+)';
+
+		    return $this->mapper->rest($name, $options);
+        }
+        throw new RuntimeException("Could not add subroute to '{$this->name}'. A Mapper object is not defined in this route.");
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function has($name)
+    {
+        if (strpos($this->name, $name) === 0) {
+            $name = substr($name, strlen($this->name));
+            if (array_key_exists($name, $this->members) ||
+                array_key_exists($name, $this->collections)) {
+                return true;
+            }
+        }
+        return false;
+    }
 }

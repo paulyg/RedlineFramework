@@ -167,17 +167,7 @@ class BasicRoute implements RouteInterface
         throw new RuntimeException("Could not add subroute to '{$this->name}'. A Mapper object is not defined in this route.");
 	}
 
-	public function hasChildren()
-	{
-		return !empty($this->subroutes);
-	}
-
-	public function getChildren()
-	{
-		return $this->subroutes;
-	}
-
-    /**
+	/**
      * @inheritdoc
      */
     public function match($uri_path)
@@ -252,43 +242,19 @@ class BasicRoute implements RouteInterface
         return $this->name;
     }
 
-	/**
-	 * Create multiple common routing paths for working with a single entity type.
-     * @param string $name Resource name
-	 * @return type
-	 */
-	public function resource($name)
-	{
-        $path = $this->path . '/' . $name . '/';
-        $id_condition = array(
-            'conditions' => array('id' => '(\d+)'),
-            'method' => 'GET'
-        );
-        $this->subroutes[] = new Route($path, $name . '#index');
-        $this->subroutes[] = new Route($path . '{:id}', $name . '#show', array(
-            'conditions' => array('id' => '(\d+)'),
-            'method' => 'GET'
-        ));
-        $this->subroutes[] = new Route($path . 'new', $name . '#new', array(
-            'method' => 'GET|POST'
-        ));
-        $this->subroutes[] = new Route($path, $name . '#create', array(
-            'method' => 'POST'
-        ));        
-        $this->subroutes[] = new Route($path . 'edit/{:id}', $name . '#edit', array(
-            'conditions' => array('id' => '(\d+)'),
-            'method' => 'GET|POST'
-        ));
-        $this->subroutes[] = new Route($path . '{:id}', $name . '#update', array(
-            'method' => 'PUT'
-        ));
-        $this->subroutes[] = new Route($path . 'delete/{:id}', $name . '#delete', array(
-            'conditions' => array('id' => '(\d+)'),
-            'method' => 'POST'
-        ));
-        $this->subroutes[] = new Route($path . '{:id}', $name . '#delete', array(
-            'conditions' => array('id' => '(\d+)'),
-            'method' => 'DELETE'
-        ));
-	}
+    /**
+     * @inheritdoc
+     */
+    public function has($name)
+    {
+        return false;
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function getParams()
+    {
+        return $this->params;
+    }
 }

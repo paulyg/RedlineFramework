@@ -54,10 +54,13 @@ class Mapper
 
 	/**
 	 * Object constructor.
-	 * @param Redline\subpackage\foo\dep_class
+	 * @param Redline\
 	 */
-	public function __construct(<bar>\<dep_class> $dep = null)
+	public function __construct($scheme, $hostname, $baseUrlPath)
 	{
+        $this->schema = $schema;
+        $this->hostname = $hostname;
+        $this->baseurlPath = $baseUrlPath;
 	}
 
 	/**
@@ -108,12 +111,7 @@ class Mapper
             return true;
         }
 
-        foreach ($routes as $route) {
-            if ($route->has($name)) {
-                $route->remove($name);
-                break;
-            }
-        }
+        return false;
     }
 
     /**

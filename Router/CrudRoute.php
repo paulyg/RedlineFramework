@@ -32,21 +32,22 @@ class CrudRoute extends BasicRoute
 	 * List of valid collection level actions for this resource.
 	 * @var array
 	 */
-	protected $collections = array('new' => 'GET|POST');
+	protected $collections = array('index' => 'GET', 'new' => 'GET|POST');
 
     /**
 	 * List of valid member level actions for this resource.
 	 * @var string
 	 */
-	protected $members = array('edit' => 'GET|POST', 'delete' => 'GET|POST');
+	protected $members = array('edit' => 'GET|POST', 'delete' => 'GET|POST', 'show' => 'GET');
 
  	/**
 	 * Construct a new CrudRoute.
      *
 	 * @param string $name    Name of the controller to call for all CRUD actions.
 	 * @param array  $options Additional options.
+     * @param Mapper $mapper  Reference back to the mapper for creating subroutes.
 	 */
-	public function __construct($name, array $options = array())
+	public function __construct($name, array $options = array(), $mapper = null)
 	{
         // Colon must not be 1st char so we accept 0 as false instead of using === false
         if (strpos($name, ':')) {
@@ -74,23 +75,37 @@ class CrudRoute extends BasicRoute
         $this->name = $name;
 
         // handle "except" and "only" options
-	}
+        if (isset($options['only'])) {
+            foreach ($this->collections as $key => $val) {
+                if (!in_array($key, $options['only'])) {
+                    unset($this->collections[$key];
+                }
+            }
+            foreach ($this->members as $key => $val) {
+                if (!in_array($key, $options['only'])) {
+                    unset($this->members[$key];
+                }
+            }
+        } elseif (isset($options['except'])) {
+            foreach ($options['except'] as $action) {
+                foreach ($this->collections as $key => $val) {
+                    if ($key == $action) {
+                        unset($this->collections[$action];
+                        break 2;
+                    }
+                }
+                foreach ($this->members as $key => $val) {
+                    if ($key == $action) {
+                        unset($this->members[$action];
+                        break 2;
+                    }
+                }
+            }
+        }
 
-	/**
-	 * Add a new route underneath this route.
-	 * @param string $path URL path specification to match route against.
-	 * @param string $controller_spec Special format indicating module, controller class
-     *                                & action to call.
-	 * @param array  $options Name, method, conditions, and default options.
-	 */
-	public function add($path, $controller_spec, array $options = array())
-	{
-		$options['name_prefix'] = $this->name;
-		$options['path_prefix'] = $this->path;
-        $options['conditions'] = array_replace($this->conditions, $options['conditions']);
-        $options['defaults'] = array_replace($this->defaults, $options['defaults']);
-
-		$this->subroutes[] = new Route($path, $controller_spec, $options);
+        if ($mapper instanceof Mapper) {
+            $this->mapper = $mapper;
+        }
 	}
 
     /**
@@ -102,13 +117,13 @@ class CrudRoute extends BasicRoute
             return false;
         }
 
-        if (!isset($this->params['id']) && empty($this->params['action'])) {
+        if (!isset($this->params['id']) && empty($this->params['action']) && isset($this->collections['index'])) {
             $this->action = 'index';
             return true;
         }
 
         $id = (int) $this->params['id'];
-        if (($id > 0) && empty($this->params['action'])) {
+        if (($id > 0) && empty($this->params['action']) && isset($this->members['show'])) {
             $this->action = 'show';
             return true;
         }
@@ -133,23 +148,41 @@ class CrudRoute extends BasicRoute
     {
     }
 
-    /**
-     * @inheritdoc
-     */
-    public function name()
+    public function addCollectionMethod($name, $methods = 'GET|POST')
     {
-        return $this->name;
+        $this->collections[$name] = $methods;
     }
 
-    public function addCollectionMethod($name)
+    public function addMemberMethod($name, $methods = 'GET|POST')
     {
-    }
-
-    public function addMemberMethod($name)
-    {
+        $this->members[$name] = $methods;
     }
 
     public function crud($name, array $options = array())
     {
+        if ($this->mapper) {
+		    $options['name_prefix'] = $this->name;
+		    $options['path_prefix'] = (!empty($this->module) ? "/{$this->module}" : '')
+                . "/{$this->controller}/:{$this->controller}_id";
+            $options['conditions'][$this->controller . '_id'] = '(\d+)';
+
+		    return $this->mapper->crud($name, $options);
+        }
+        throw new RuntimeException("Could not add subroute to '{$this->name}'. A Mapper object is not defined in this route.");
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function has($name)
+    {
+        if (strpos($this->name, $name) === 0) {
+            $name = substr($name, strlen($this->name));
+            if (array_key_exists($name, $this->members) ||
+                array_key_exists($name, $this->collections)) {
+                return true;
+            }
+        }
+        return false;
     }
 }

@@ -68,15 +68,7 @@ interface RouteInterface
      */
     public function has($name);
 
-    /**
-     * Remove/delete a contained/child route by name.
-     *
-     * @param string $name
-     * @return void
-     */
-    public function remove($name);
-
-    /**
+     /**
      * Retrieve the parameters captured from the URL pattern during the match.
      *
      * @return array
