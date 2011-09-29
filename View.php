@@ -240,6 +240,32 @@ class View
 		}
 	}
 
+    /**
+     * Replace the current template variables with a new set.
+     *
+     * @param array|object $vars
+     * @throws InvalidArgumentException on incorrect parameter type or setting private variable.
+     */
+    public function replace($vars)
+    {
+        if (!is_array($vars) || !is_object($vars)) {
+            $type = gettype($vars);
+			throw new InvalidArgumentException("Only an array or object may be passed to View:replace(). You passed '$type'.");
+        }
+        $this->clear();
+        $this->assign($vars);
+    }
+
+    /**
+     * Return the currently assigned template variables.
+     *
+     * @return array
+     */
+    public function retreive()
+    {
+        return $this->vars;
+    }
+
 	/**
 	 * Add a css file to the css queue.
 	 * @param string $filename
@@ -431,26 +457,23 @@ class View
 	 * @return void
 	 * @throws LogicException if the view script does not exist.
 	 */
-	public function render($__file__ = null, $__vars__ = array(), $__into__ = '')
+	public function render($__file = null, $__vars = array(), $__into = '')
 	{
-		if (substr($__file__, -4) != '.php') {
-			$__file__ = $file . '.php';
-		}
-		$__file__ = $this->findViewScript($__file__);
+		$__file = $this->findScript($__file);
 		
-		if (!file_exists($__file__)) {
-			throw new LogicException("The view script '$__file__' does not exist.");
+		if (!file_exists($__file)) {
+			throw new LogicException("The view script '$__file' does not exist.");
 		}
 
-        if (empty($__vars__)) {
-            $__vars__ = $this->vars;
+        if (empty($__vars)) {
+            $__vars = $this->vars;
         }
 
 		ob_start();
-		extract($__vars__, EXTR_SKIP);
-		include $__file__;
-        if (!empty($__into__)) {
-            $this->vars[$__into__] = ob_get_clean();
+		extract($__vars, EXTR_SKIP);
+		include $__file;
+        if (!empty($__into)) {
+            $this->vars[$__into] = ob_get_clean();
             return;
         }
         return ob_get_clean();
@@ -477,4 +500,32 @@ class View
 		extract($this->vars, EXTR_OVERWRITE);
 		include $file;
 	}
+
+    protected function findFile($spec)
+    {
+        extract($this->app->getDispatchParams());
+        $module = $this->app->getModule($module);
+        $buildPath = function() use ($module, $controller, $action) {
+            if (is_object($module)) {
+                $modulePath = $module->getPath();
+            } else {
+                $modulePath = ROOT_DIR . 'application' . DIRECTORY_SEPARATOR;
+            }
+            return  $modulePath . DIRECTORY_SEPARATOR . 'views' . DIRECTORY_SEPARATOR .
+                $controller . DIRECTORY_SEPARATOR . $action . '.php';
+        };
+
+        if (empty($spec)) {
+            return $buildPath();
+        } elseif (strpos($spec, '#') === false) {
+            $action = $spec;
+            return $buildPath();
+        } else {
+            list($controller, $action) = explode('#', $controller_spec);
+            if (strpos($controller, ':') !== false) {
+                list($module, $controller) = explode(':', $controller);
+            }
+            return $buildPath();
+        }
+    }
 }

@@ -31,7 +31,7 @@ namespace Redline;
  */
 class Response
 {
-    protected $status_codes = array(
+    protected static $statusCodes = array(
         '100' => 'Continue',
         '101' => 'Switching Protocols',
 
@@ -78,23 +78,31 @@ class Response
         '505' => 'HTTP Version Not Supported',
     );
 
+    protected $status;
+
+    protected $contentType;
+
+    protected $headers;
+
+    protected $content = '';
+
 	/* good way to set these quickly but not sure if I like it */
 	public function __construct($content = '', $status = 200, $headers = null);
 
 	/* Headers */
     public function status($code)
     {
-		if (isset($this->status_codes[$code])) {
-			$status = " $code ".  $this->status_codes[$code];
+		if (isset(self::$statusCodes[$code])) {
+			$status = " $code " .  self::$statusCodes[$code];
 		} else {
 			$status = " $code";
 		}
 
 		// catches 'cgi' (PHP < 5.3), 'cgi-fcgi' (PHP >= 5.3), & 'fpm-fcgi'
 		if (strpos(php_sapi_name(), 'cgi') !== false) {
-			header('Status:' . $code);
+			$this->status = 'Status:' . $code;
 		} else {
-			header('HTTP/1.1' . $code);
+			$this->status = 'HTTP/1.1' . $code;
 		}
     }
 

@@ -42,14 +42,16 @@ interface HttpResponseInterface
 	public function html($status = 0);
 	public function xml($status = 0);
 	public function json($status = 0);
+    public function text($status = 0);
  
 	/* headers */
-	public function header(); // add or replace one
+	public function getHeader($name); // get one
+    public function setHeader($name, $value); // set one
 	public function getHeaders(); // get all
-	public function setHeaders(); // replace all
+	public function setHeaders(array $headers); // replace all
  
 	/* content, not sure if we can/should do this */
-	public function content(); // add/append
+	public function content($content); // add/append
 	public function getContent(); // retreive
-	public function setContent(); // reset/overwrite
+	public function setContent($content); // reset/overwrite
 }

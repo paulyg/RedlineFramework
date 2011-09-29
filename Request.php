@@ -31,15 +31,15 @@ namespace Redline;
  */
 class Request
 {
-    protected $host;
+    protected $hostName;
 
-    protected $path;
+    protected $basePath;
 
-    protected $script_name;
+    protected $scriptName;
 
-    protected $request_uri;
+    protected $requestUri;
 
-    protected $is_mobile;
+    protected $isMobile;
 
     public function __construct()
     {
@@ -51,9 +51,9 @@ class Request
 			throw new RuntimeException("Neither of the SERVER vars PHP_SELF or SCRIPT_NAME are set. Please check your webserver configuration.");
 		}
 
-		$this->script_name = basename($base_url);
+		$this->scriptName = basename($base_url);
 		// Ensure one trailing slash.
-		$this->path = rtrim(dirname($base_url), '/') . '/';
+		$this->basePath = rtrim(dirname($base_url), '/') . '/';
 	}
 
 	/* Accessors for various Superglobals. */
@@ -104,9 +104,9 @@ class Request
                 }
             }
 
-            $this->request_uri = $request_uri;
+            $this->requestUri = $request_uri;
         }
-        return $this->request_uri;
+        return $this->requestUri;
     }
 
     public function scheme()
@@ -114,35 +114,35 @@ class Request
         return ($this->isSecure()) ? 'https://' : 'http://';
     }
 
-    public function host()
+    public function hostName()
     {
         if (empty($this->host)) {
             if (isset($_SERVER['HTTP_HOST'])) {
-		    	$this->host = $_SERVER['HTTP_HOST'];
+		    	$this->hostName = $_SERVER['HTTP_HOST'];
 		    } elseif (isset($_SERVER['SERVER_NAME'])) {
-		    	$this->host = $_SERVER['SERVER_NAME'];
+		    	$this->hostName = $_SERVER['SERVER_NAME'];
 		    } else {
-		    	$this->host = '';
+		    	$this->hostName = '';
 		    }
         }
-        return $this->host;
+        return $this->hostName;
     }
 
-    public function path($with_script_name = false)
+    public function basePath($with_script_name = false)
     {
-        return $this->path . ($with_script_name) ? $this->script_name : '';
+        return $this->basePath . ($with_script_name) ? $this->scriptName : '';
     }
 
 	public function scriptName()
     {
-        return $this->script_name;
+        return $this->scriptName;
     }
 
     public function queryString() {}
 
     public function baseUrl($with_script_name = false)
     {
-        return $this->scheme() . $this->host() . $this->path($with_script_name);
+        return $this->scheme() . $this->hostName() . $this->basePath($with_script_name);
     }
  
 	/* HTTP Method Tests */
@@ -187,8 +187,8 @@ class Request
 
     public function isMobile()
     {
-        if (empty($this->is_mobile)) {
-            $this->is_mobile = false;
+        if (empty($this->isMobile)) {
+            $this->isMobile = false;
 
 		    $platforms = array(
 		    	'android'    => 'android',
@@ -205,18 +205,18 @@ class Request
 		    $accept = $_SERVER['HTTP_ACCEPT'];
 
 		    if (isset($_SERVER['HTTP_X_WAP_PROFILE']) || isset($_SERVER['HTTP_PROFILE'])) {
-			    $this->is_mobile = true;
+			    $this->isMobile = true;
 		    } elseif (strpos($accept,'text/vnd.wap.wml') > 0 || strpos($accept,'application/vnd.wap.xhtml+xml') > 0) {
-		    	$this->is_mobile = true;
+		    	$this->isMobile = true;
 		    } else {
 			    foreach ($platforms as $platform => $regexp) {
 				    if (preg_match("/$regexp/i", $user_agent)) {
-                        $this->is_mobile = $platform;
+                        $this->isMobile = $platform;
 			        }
 			    }
 		    }
         }
-        return $this->is_mobile;
+        return $this->isMobile;
     }
 
 	/* These are all optional. */ 
