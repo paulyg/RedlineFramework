@@ -28,37 +28,62 @@ use Redline\Database as DB;
  *
  * @package RedlineFramework
  */
-class RecordSet implements \IteratorAggregate, \Countable
+class RecordSet implements \Iterator, \Countable
 {
-	protected $table_name;
+	protected $className;
 
-	protected $active_record_class;
+    protected $results;
 
-    protected $result;
+    protected $position = 0;
 
-    protected $keys;
+	protected $current;
 
-	protected $where_clause;
+    public function __construct($results, $className, $count)
+    {
+        $results->setFetchMode(PDO::FETCH_CLASS, $className);
+        $this->results = $results;
+        $this->className = $className;
+        $this->count = $count;
+    }
 
-	protected $data = array();
+    public function current()
+    {
+        return $this->current;
+    }
 
-    public function __construct() {}
+    public function key()
+    {
+        return $this->position;
+    }
 
-	public function count()
-	{
-		return count($this->data);
-	}
+    public function next()
+    {
+        $this->current = $this->results->fetchRow(PDO::FETCH_CLASS);
+        $this->position++;
+    }
 
-	public function getIterator()
-	{
-		return new ArrayIterator($this->data);
-	}
+    public function rewind()
+    {
+        // no op! Can't rewind PDOStatement
+    }
 
-	public function update(array $input)
-	{
-	}
+    public function valid()
+    {
+        return (bool) $this->current;
+    }
+
+    public function count()
+    {
+        return $this->count;
+    }
+
 
 	public function delete()
 	{
 	}
+
+    public function toArray()
+    {
+        return $this->results->fetchAll(PDO::FETCH_ASSOC);
+    }
 }

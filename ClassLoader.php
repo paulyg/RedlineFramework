@@ -57,7 +57,13 @@ class ClassLoader
      * prefix match. Use as a fallback mechanism.
      * @var string
      */
-    private $base_path = '';
+    private $fallbackPath = '';
+
+    /**
+     * Attempt to load classes from include_path as a last resort?
+     * @var bool
+     */
+    private $useIncludePath = false;
 
 	/**
 	 * Add a namespace/directory path pair.
@@ -115,9 +121,9 @@ class ClassLoader
      * @param string $path
      * @return ClassLoader
      */
-    public function setBasePath($path)
+    public function setFallbackPath($path)
     {
-        $this->basePath = $path;
+        $this->fallbackPath = $path;
         return $this;
     }
 
@@ -141,50 +147,55 @@ class ClassLoader
 
 	public function loadClass($class_name)
 	{
-        if (strpos($class, '\\') !== false) {
-            foreach ($this->namespaces as $namespace) {
-                if (strpos($class, $namepsace) === 0) {
-                    // do stuff
+        if ($class[0] == '\\') {
+            $class = substr($class, 1);
+        }
+
+        $pos = strrpos($class, '\\');
+
+        if ($pos !== false) {
+            $namespace = substr($class, 0, $pos);
+            $className = substr($class, $pos + 1);
+            $normalizedClass = str_replace('\\', DIRECTORY_SEPARATOR, $namespace) .
+                               DIRECTORY_SEPARATOR .
+                               str_replace('_', DIRECTORY_SEPARATOR, $className) .
+                               '.php';
+
+            foreach ($this->namespaces as $ns => $dir) {
+                if (strpos($namepsace, $ns) === 0) {
+                    $file = $dir . DIRECTORY_SEPARATOR . $normalizedClass;
+                    if (is_file($file)) {
+                        require $file;
+                        return true;
+                    }
                 }
             }
-        }
-        if (strpos($class, '_') !== false) {
+        } else {
+            $normalizedClass = str_replace('_', DIRECTORY_SEPARATOR, $class) . '.php';
+
             foreach ($this->prefixes as $prefix) {
                 if (strpos($class, $prefix) === 0) {
-                    // do stuff
+                    $file = $dir . DIRECTORY_SEPARATOR . $normalizedClass;
+                    if (is_file($file)) {
+                        require $file;
+                        return true;
+                    }
                 }
             }
         }
-        if (!empty($this->basePath) {
-            // do stuff
+        if (!empty($this->fallbackPath) {
+            $file = $this->fallbackPath . DIRECTORY_SEPARATOR . $normalizedClass;
+            if (is_file($file)) {
+                require $file;
+                return true;
+            }
         }
+
+        if ($this->useIncludePath && $file = stream_resolve_include_path($normalizedClass)) {
+            require $file;
+            return true;
+        }
+
         return false;
-        // <-- begin old code -->
-		if ($first_ns_pos = strpos($class_name, '\\')) {
-			$ns_prefix = substr($class_name, 0, $first_ns_pos);
-			$class_name = substr($class_name, $first_ns_pos + 1);
-
-			foreach ($this->map as $ns => $path) {
-				if ($ns === 0) {
-					continue;
-				}
-				if ($ns_prefix === $ns) {
-					$path_prefix = $path;
-					break;
-				}
-			}
-
-			if ($last_ns_pos = strripos($class_name, '\\')) {
-        		$sub_namespace = substr($class_ame, 0, $last_ns_pos);
-        		$class_name = substr($class_name, $last_ns_pos + 1);
-        		$file_name  = str_replace('\\', DIRECTORY_SEPARATOR, $sub_namespace) . DIRECTORY_SEPARATOR;
-    		}
-		} else {
-			$path_prefix = (isset($this->map[0])) ? $this->map[0] : '';
-			$file_name = '';
-		}
-		$file_name .= str_replace('_', DIRECTORY_SEPARATOR, $class_name) . '.php';
-
-		require $path_prefix . DIRECTORY_SEPARATOR . $file_name;
 	}
 }

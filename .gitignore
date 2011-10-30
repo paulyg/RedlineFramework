@@ -1,4 +1,5 @@
 *.txt
+*.swp
 routes.rb
 schema.rb
 symfony_index.php

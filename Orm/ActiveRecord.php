@@ -479,20 +479,18 @@ class ActiveRecord implements \ArrayAccess
 		}
 
 		$where =  $db->quoteIdentifier($column).' = '.$db->quote($ids);
+        $sqlc = "SELECT COUNT(*) FROM ".static::$table_name."WHERE $where";
 		$sql = "SELECT * FROM ".static::$table_name." WHERE $where";
 
-		$results = $db->queryAll($sql);
+        $count = $db->queryOne($sqlc);
+		$results = $db->query($sql);
 
-		if (count($results) == 1) {
-			$return = new $class;
-			$return->loadValues($results[0]);
+		if ($count == 1) {
+			$results->setFetchMode(PDO::FETCH_CLASS, $class);
+			$return = $results->fetchRow();
+            unset($results);
 		} else {
-			$return = array();
-			foreach ($results as $result) {
-				$record = new $class;
-				$record->loadValues($result);
-				$return[] = $record;
-			}
+			$return = new RecordSet($results, $class, $count);
 		}
 
 		return $return;
@@ -532,10 +530,8 @@ class ActiveRecord implements \ArrayAccess
 			}
 		}
 
-		$record = new $class($db);
-		$record->pending_query = $select;
-
-		return $record;
+        $results = $this->db->query($select->build());
+		return new RecordSet($results, $class, -1);
 	}
 
 	/**

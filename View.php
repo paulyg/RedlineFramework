@@ -65,9 +65,9 @@ class View
 
 	/**
 	 * Collection of helper objects.
-	 * @var array
+	 * @var Redline\PluginLoader
 	 */
-	protected $helpers = array();
+	protected $helpers;
 
 	/**
 	 * Beginning part of all URLs.
@@ -88,48 +88,12 @@ class View
 	protected $themeUrl = '';
 
 	/**
-	 * Collection of CSS files to include when rendering the page.
-	 * @var array
-	 */
-	public $stylesheets = array();
-
-	/**
-	 * Collection of Javascript files to include in the head when rendering the page.
-	 * @var array
-	 */
-	public $headJavascripts = array();
-
-	/**
-	 * Collection of Javascript files to include in the footer when rendering the page.
-	 * @var array
-	 */
-	public $tailJavascripts = array();
-
-	/**
-	 * Collection of Javascript snippits to include in the footer when rendering the page.
-	 * @var array
-	 */
-	public $inlineJavascriptCode = array();
-
-	/**
-	 * Collection of meta tags to include when rendering the page.
-	 * @var array
-	 */
-	public $meta = array();
-
-	/**
-	 * Collection of link tags to include when rendering page.
-	 * @var array
-	 */
-	public $links = array();
-
-	/**
 	 * Object Constructor.
-	 * @param Redline_Request $request
-	 * @param Redline_Application $app
-	 * @return Redline_View
+	 * @param Redline\Request $request
+	 * @param Redline\Application $app
+	 * @return Redline\View
 	 */
-	public function __construct(Redline_Request $request, Redline_Application $app)
+	public function __construct(Redline\Request $request, Redline\Application $app)
 	{
 		$this->request = $request;
 		$this->app = $app;
@@ -140,22 +104,10 @@ class View
 	 * @return string
 	 * @throws BadMethodCallException
 	 */
-	public function __call($helper, $args = array())
+	public function __call($helper)
 	{
-		if (!isset($this->helpers[$helper])) {
-			$class = 'Tm_Helper_' . ucfirst($helper);
-
-			if (class_exists($class, true)) {
-				$object = new $class($this->app);
-				$this->helpers[$helper] = $object;
-			} else {
-				throw new BadMethodCallException("View helper class '$class' does not exist!");
-			}
-		} else {
-			$object = $this->helpers[$helper];
-		}
-
-		return call_user_func_array(array($object, $helper), $args);
+		$loader = $this->getHelperManager();
+        return $loader->load($helper);
 	}
 
 	/**
@@ -198,6 +150,19 @@ class View
 	{
 		unset($this->vars[$key]);
 	}
+
+    public function getHelperManager()
+    {
+        if (!isset($this->helpers)) {
+            $this->helpers = new PluginLoader();
+        }
+        return $this->helpers;
+    }
+
+    public function setHelperManager(Redline\PluginLoader $loader)
+    {
+        $this->helpers = $loader;
+    }
 
 	/**
 	 * Set the path to folder with view scripts to be rendered.
@@ -266,164 +231,7 @@ class View
         return $this->vars;
     }
 
-	/**
-	 * Add a css file to the css queue.
-	 * @param string $filename
-	 * @param string $media
-	 * @return void
-	 */
-	public function addStylesheet($filename, $media = 'screen')
-	{
-		$css = '<link rel="stylesheet" type="text/css" media="' . $media . '" href="';
-		$css .= $this->themeUrl . 'css/' . $filename . '" />';
-		$this->stylesheets[] = $css;
-	}
-
-	/**
-	 * Echo out all queued stylesheets.
-	 * @return void
-	 */
-	public function stylesheets()
-	{
-		echo implode("\n", array_reverse($this->stylesheets));
-	}
-
-	/**
-	 * Add a javascript file to the js queue.
-	 * @param string $filename
-	 * @param string $headortail
-	 * $param string $min_suffix
-	 * @return void
-	 */
-	public function addJavascript($file, $headortail = 'tail', $min_suffix = '')
-	{
-		if ($min_suffix && !DEBUG_MODE) {
-			$file = substr($file, 0, -2) . $min_suffix . '.js';
-		}
-		$js = '<script type="text/javascript" src="';
-		$js .= $this->themeUrl . 'js/' . $file . '"></script>';
-
-		switch ($headortail) {
-			case 'head':
-				$this->headJavascripts[] = $js;
-				break;
-			case 'tail':
-				$this->tailJavascripts[] = $js;
-				break;
-			default:
-				throw new InvalidArgumentException('Invalid value for $headortail.');
-		}
-	}
-
-	/**
-	 * Add an inline javascript snippit.
-	 * @param string $content
-	 * @return void
-	 */
-	public function addJavascriptInline($content)
-	{
-		$this->inlineJavascriptCode .= "<script type=\"text/javascript\">\n//<![CDATA[\n{$content}\n//]]>\n</script>\n";
-	}
-
-	/**
-	 * Echo queued javascript files.
-	 * @param string $headortail
-	 * @return void
-	 */
-	public function javascripts($headortail)
-	{
-		switch ($headortail) {
-			case 'head':
-				echo implode("\n", array_reverse($this->headJavascripts));
-				break;
-			case 'tail':
-				echo implode("\n", array_reverse($this->tailJavascripts));
-				break;
-			default:
-				throw new InvalidArgumentException('Invalid value for $headortail.');
-		}
-	}
-
-	/**
-	 * Echo queued inline javascript code.
-	 * @return void
-	 */
-	public function inlineJavascript()
-	{
-		echo implode("\n", $this->inlineJavascriptCode);
-	}
-
-	/**
-	 * Add a meta tag (non http-equiv) to the meta tag queue.
-	 * @param string $name
-	 * @param string $content
-	 * @return void
-	 */
-	public function addMeta($name, $content)
-	{
-		$meta = '<meta name="' . $name . '" content="' . $content . '" />';
-		$this->meta[] = $meta;
-	}
-
-	/**
-	 * Make the meta tag for a delayed redirect.
-	 * @param string $url
-	 * @param int $delay Time delay in seconds
-	 * @return void
-	 */
-	public function metaRefresh($url, $delay = 20)
-	{
-		$url = Tm_Filter::sanitizeUrl($url);
-		$meta = '<meta http-equiv="refresh" content="' . $delay . ';url=' . $url . '" />';
-		$this->meta[] = $meta;
-	}
-
-	/**
-	 * Echo out all queued meta tags.
-	 * @return void
-	 */
-	public function metaTags()
-	{
-		echo implode("\n", $this->meta);
-	}
-
-	/**
-	 * Add a link tag to be displayed in the head of the page.
-	 * @param string $rel
-	 * @param string $type
-	 * @param string $href
-	 * @param string $hreflang
-	 * @param string $charset
-	 * @param string $media
-	 * @return void
-	 */
-	public function addLinkTag($rel, $type, $href, $hreflang = null, $charset = null, $media = null)
-	{
-		$href = Tm_Filter::sanitizeUrl($href);
-		$link = '<link rel="' . $rel . '" type="' . $type . '" href="' . $href;
-		if (!is_null($hreflang)) {
-			$link .= '" hreflang="' . $hreflang;
-		}
-		if (!is_null($charset)) {
-			$link .= '" charset="' . $charset;
-		}
-		if (!is_null($media)) {
-			$link .= '" media="' . $media;
-		}
-		$link .= '" />';
-		$this->links[] = $link;
-	}
-
-	/**
-	 * Echo out all queued link tags.
-	 * @return void
-	 */
-	public function linkTags()
-	{
-		echo implode("\n", $this->links);
-	}
-
-	/**
+    /**
 	 * Set the name of the layout script to render.
 	 * @param string $file Layout script file name.
 	 * @return void
