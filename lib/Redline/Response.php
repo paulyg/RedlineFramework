@@ -101,17 +101,23 @@ class Response
      */
     protected $content = '';
 
-	/* good way to set these quickly but not sure if I like it */
-	public function __construct($content = '', $status = 200, $headers = null)
+    /**
+     * Object constructor.
+     *
+     * @param integer $status HTTP response status code.
+     * @param array $headers HTTP response headers.
+     * @param string|object $content Response body content.
+     */
+    public function __construct($status = 200, array $headers = array(), $content = '')
     {
-        $this->content = $content;
         $this->status($status);
-        if (is_array($headers)) {
-            $this->setHeaders($headers);
+        $this->setHeaders($headers);
+        if (!empty($content)) {
+            $this->content = $content;
         }
     }
 
-	/**
+    /**
      * Set the response Status.
      *
      * @param int $code The three digit reponse code.
@@ -120,18 +126,18 @@ class Response
      */
     public function status($code, $reason = null)
     {
-		if (is_null($reason) && isset(self::$statusCodes[$code])) {
-			$status = " $code " .  self::$statusCodes[$code];
-		} else {
-			$status = " $code";
-		}
+        if (is_null($reason) && isset(self::$statusCodes[$code])) {
+            $status = " $code " .  self::$statusCodes[$code];
+        } else {
+            $status = " $code";
+        }
 
-		// catches 'cgi' (PHP < 5.3), 'cgi-fcgi' (PHP >= 5.3), & 'fpm-fcgi'
-		if (strpos(php_sapi_name(), 'cgi') !== false) {
-			$this->status = 'Status:' . $code;
-		} else {
-			$this->status = 'HTTP/1.1' . $code;
-		}
+        // catches 'cgi' (PHP < 5.3), 'cgi-fcgi' (PHP >= 5.3), & 'fpm-fcgi'
+        if (strpos(php_sapi_name(), 'cgi') !== false) {
+            $this->status = 'Status:' . $code;
+        } else {
+            $this->status = 'HTTP/1.1' . $code;
+        }
     }
 
     /**
@@ -152,7 +158,7 @@ class Response
      * @param string $value Header value.
      * @return void
      */
-	public function setHeader($name, $value)
+    public function setHeader($name, $value)
     {
         $name = $this->normalizeHeaderName($name);
         $this->headers[$name] = $value;
@@ -188,38 +194,72 @@ class Response
      *
      * @return array
      */
-	public function getHeaders()
+    public function getHeaders()
     {
         return $this->headers;
     }
-	
+    
 
     public function setCookie()
     {
     }
  
-	/* Content, not sure if we can/should do this */
-	public function content($content)
+    /**
+     * Set the response body.
+     *
+     * The $content can be an object but only if it has a __toString() defined.
+     *
+     * @param string|object $content
+     * @return void
+     * @throws InvalidArgumentException on invalid $content type.
+     */
+    public function setContent($content)
     {
-        $this->content .= $content;
+        if (is_object($content) && method_exists($content, '__toString')) {
+            $this->content = (string) $content;
+        } else if (is_string($content)) {
+            $this->content = $content;
+        } else {
+            throw new InvalidArgumentException('Content type must be a string or object with a __toString() method.');
+        }
     }
 
-	public function getContent()
+    /**
+     * Add to the response body.
+     *
+     * The $content can be an object but only if it has a __toString() defined.
+     *
+     * @param string|object $content
+     * @return void
+     * @throws InvalidArgumentException on invalid $content type.
+     */
+    public function appendContent($content)
     {
-        return $this->$content;
+        if (is_object($content) && method_exists($content, '__toString')) {
+            $this->content .= (string) $content;
+        } else if (is_string($content)) {
+            $this->content .= $content;
+        } else {
+            throw new InvalidArgumentException('Content type must be a string or object with a __toString() method.');
+        }
     }
 
-	public function setContent($content)
+    /**
+     * Return the reposnse body content already set.
+     *
+     * @return string
+     */
+    public function getContent()
     {
-        $this->content = $content;
+        return $this->content;
     }
 
-	/**
+    /**
      * Send HTTP headers to the client.
      *
      * @return void
      */
-	public function sendHeaders()
+    public function sendHeaders()
     {
         if (headers_sent()) {
             throw new RuntimeException("Attempting to call Response::sendHeaders() but headers have already been sent.");
@@ -233,26 +273,31 @@ class Response
         }
     }
 
-	public function sendContent()
+    /**
+     * Send the response body to the client.
+     *
+     * @return void
+     */
+    public function sendContent()
     {
         echo $this->content;
     }
 
-	/**
+    /**
      * Helper for setting status and content-type to HTML.
      *
      * @param int $status Code.
      * @param string $content Body.
      * @return void
      */
-	public function html($status = 200, $content = '')
+    public function html($status = 200, $content = '')
     {
         $this->status($status);
         $this->setHeader('Content-Type', 'text/html; charset=UTF-8');
-        $this->content = $content;
+        $this->content = (string) $content;
     }
 
-	/**
+    /**
      * Helper for setting status and content-type to HTML.
      *
      * @param int $status Code.
@@ -260,7 +305,7 @@ class Response
      * @param string $additionalType Something to go before "+xml" in the content-type.
      * @return void
      */
-	public function xml($status = 200, $content = '', $additionalType = '')
+    public function xml($status = 200, $content = '', $additionalType = '')
     {
         $this->status($status);
         if (!is_null($additionalType)) {
@@ -269,24 +314,32 @@ class Response
             $type = "application/xml";
         }
         $this->setHeader('Content-Type', $type);
-        $this->content = $content;
+        if (is_object($content) && method_exists($content, 'toXml')) {
+            $this->content = $content->toXml();
+        } else {
+            $this->content = $content;
+        }
     }
 
-	/**
+    /**
      * Helper for setting status and content-type to JSON.
      *
      * @param int $status Code.
      * @param string $content Body.
      * @return void
      */
-	public function json($status = 200, $content = '')
+    public function json($status = 200, $content = '')
     {
         $this->status($status);
         $this->setHeader('Content-Type', 'application/json');
-        $this->content = $content;
+        if (is_object($content) && method_exists($content, 'toJson')) {
+            $this->content = $content->toJson();
+        } else {
+            $this->content = $content;
+        }
     }
 
-	/**
+    /**
      * Helper for setting status and content-type to plain text.
      *
      * @param int $status Code.
@@ -297,7 +350,7 @@ class Response
     {
         $this->status($status);
         $this->setHeader('Content-Type', 'text/plain; charset=UTF-8');
-        $this->content = $content;
+        $this->content = (string) $content;
     }
 
     /* Date/Cache helpers */

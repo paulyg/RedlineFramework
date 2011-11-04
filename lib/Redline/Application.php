@@ -21,6 +21,13 @@
  */
 namespace Redline;
 
+use Redline\Config,
+    Redline\ClassLoader,
+    Redline\Request,
+    Redline\Response,
+    Redline\Router\Mapper,
+    Redline\View;
+
 /**
  * Master class for interaction with the framework.
  *
@@ -28,430 +35,480 @@ namespace Redline;
  */
 class Application
 {
-	/**
-	 * The global configuration object, see {@link getConfig()}.
-	 * @var Redline\Config
-	 */
-	protected $config;
-
-	/**
-	 * The database connection, see {@link getDatabase()}.
-	 * @var Redline\Database\Connection
-	 */
-	protected $db;
-
-	/**
-	 * Configuration for database connection.
-	 * @var array
-	 */
-	protected $dbconfig;
+    /**
+     * The global configuration object, see {@link config()}.
+     * @var Redline\Config
+     */
+    public $config;
+    
+    /**
+     * Service container/dependency injection container object, see {@link container()}.
+     * @var Pimple
+     */
+    public $container;
 
     /**
-     * Class loader and module manager, see {@link getLoader()}.
+     * Class loader and module manager, see {@link loader()}.
      * @var Redline\Loader
      */
-    protected $loader;
-
-	/**
-	 * Global request object, see {@link getRequest()}.
-	 * @var Redline\Request
-	 */
-	protected $request;
+    public $loader;
 
     /**
-	 * Global response object, see {@link getResponse()}.
-	 * @var Redline\Reponse
-	 */
-	protected $response;
-	
-	/**
-	 * The router object, see {@link getRouter()}.
-	 * @var Redline\Router\Mapper
-	 */
-	protected $router;
+     * Loaded module classes.
+     * @var array
+     */
+    public $modules = array();
+    
+    /**
+     * Global request object, see {@link request()}.
+     * @var Redline\Request
+     */
+    public $request;
 
-	/**
-	 * Object representing the current user, see {@link getUser()}.
-	 * @var Tm_UserModel
-	 */
-	protected $user;
+    /**
+     * Global response object, see {@link response()}.
+     * @var Redline\Reponse
+     */
+    public $response;
+    
+    /**
+     * The router object, see {@link router()}.
+     * @var Redline\Router\Mapper
+     */
+    public $router;
 
-	/**
-	 * The view object, see {@link getView()}.
-	 * @var Redline\View
-	 */
-	protected $view;
+    /**
+     * The view object, see {@link view()}.
+     * @var Redline\View
+     */
+    public $view;
 
-	/**
-	 * Object constructor.
-	 *
-	 * @param array $dbconfig
-	 * @return Tm_ApplicationController
-	 */
-	public function __construct(array $dbconfig)
-	{
-		$this->dbconfig = $dbconfig;
-	}
+    /**
+     * Object constructor. Sets up defaults for Pimple DI container.
+     */
+    public function __construct($env)
+    {
+        $this->env = $env;
+        
+        $container = new Pimple();
 
-	/**
-	 * Make sure we can connect to the database and grab the config options.
-	 * @return bool
-	 */
-	public function setup()
-	{
-		require APP_PATH . 'DBALite.php';
+        $container['config'] = function() {
+            return new Config();
+        };
 
-		$driver = $this->dbconfig['type'];
-		$this->dbconfig['driver_options'] = array(PDO::ATTR_ORACLE_NULLS => PDO::NULL_EMPTY_STRING);
+        $container['loader'] = function() {
+            return new ClassLoader();
+        };
 
-		try {
-			$this->db = DBALite::factory($driver, $this->dbconfig, false);
-		} catch (DBALite_Exception $e) {
-			if (DEBUG_MODE) {
-				$message = 'Tiramisu could not connect to the database: ' . $e->getMessage();
-			} else {
-				$message = 'Database connection error. Please try again later.';
-			}
-			tm_bail('Database connection error', $message);
-		}
+        $container['request'] = function() {
+            return Request::createFromGlobals();
+        };
 
-		$this->config = $this->loadModel('Options');
-	}
+        $container['response'] = function() use ($container) {
+            return new Response($container['request']);
+        };
 
-	/**
-	 * Returns the configuration store.
-	 * @return Redline\Config
-	 */
-	public function getConfig()
-	{
-		if (empty($this->config)) {
-            $this->config = new Redline\Config;
+        $container['router'] = function() use ($container) {
+            return new Mapper($container['request']);
+        };
+
+        $container['view'] = function() use ($container) {
+            return new View($container);
+        };
+
+        $this->container = $container;
+    }
+
+    /**
+     * Creates all objects not all ready set and prepares the application to run.
+     * @return void
+     */
+    public function startup()
+    {
+        foreach ($this->modules as $module) {
+            $module->startup($this->container);
+            if ($mod_config = $module->getConfig()) {
+                $this->container['config']->merge($mod_config);
+            }
+        }
+        
+        $config_files = array(APP_DIR.'/config/config.php', APP_DIR."/config/config-{$this->env}.php");
+        foreach ($config_files as $config_file) {
+            if (file_exists($config_file)) {
+                $this->container['config']->merge(include $config_file);
+            }
+        }
+        
+        if (file_exists($routing_file = APP_DIR.'/config/routes.php')) {
+            $this->loadRoutesFromFile($routing_file);
+        }
+    }
+    
+    /**
+     * Set or get the configuration store.
+     *
+     * @param Redline\Config $config
+     * @return Redline\Config
+     * @return Redline\Application when setting for fluent interface
+     */
+    public function config(Redline\Config $config = null)
+    {
+        if (is_null($config)) {
+            if (empty($this->config)) {
+                $this->config = new Redline\Config();
+            }
+            return $this->config;
         }
         return $this->config;
-	}
+    }
 
+ 
     /**
-     * Set the configuration store.
-     * @param Redline\Config $config
-     * @return Redline\Application Fluent interface
+     * Get or set the server request object.
+     *
+     * @param Redline\Request $request
+     * @return Redline\Request
+     * @return Redline\Application when setting for fluent interface
      */
-    public function setConfig(Redline\Config $config)
+    public function request(Redline\Request $request = null)
     {
-        $this->config = $config;
+        if (is_null($request)) {
+            if (empty($this->request)) {
+                $this->request = new Redline\Request();
+            }
+            return $this->request;
+        }
+        $this->request = $request;
         return $this;
     }
 
-	/**
-	 * Return the database connection object.
-	 * 
-	 * Creates the object if it has not been instantiated yet. Allows lazy loading.
-	 * @return Redline\Database\Connection
-	 */
-	public function getDatabase()
-	{	
-		if (empty($this->db)) {
-            //$this->db = new ...;
-        }
-        return $this->db;
-	}
-
     /**
-     * Set the database connection object.
-     * @param Redline\Database\Connection
-     * @return Redline\Application Fluent interface
+     * Get or set the server response object.
+     *
+     * @param Redline\Response $response
+     * @return Reline\Response when getting
+     * @return Redline\Application when setting for fluent interface
      */
-    public function setDatabase(Redline\Database\Connection $db)
+    public function response(Redline\Response $reponse = null)
     {
-        $this->db = $db;
+        if (is_null($reponse)) {
+            if (empty($this->response)) {
+                $this->response = new Redline\Response();
+            }
+            return $this->reponse;
+        }
+        $this->reqsponse = $response;
         return $this;
     }
 
-	/**
-	 * Return the request object.
-	 * @return Redline\Request
-	 */
-	public function getRequest()
-	{
-        if (empty($this->request)) {
-            $this->request = new Redline\Request;
+    /**
+     * Get or set the routing mapper object.
+     *
+     * @param Redline\Router\Mapper $router
+     * @return Redline\Router\Mapper when getting
+     * @return Redline\Application when setting for fluent interface
+     */
+    public function router(Redline\Router\Mapper $router = null)
+    {
+        if (is_null($router)) {
+            if (empty($this->router)) {
+                $this->router = new Redline\Router\Mapper($this->request());
+            }
+            return $this->router;
         }
-		return $this->request;
-	}
+    $this->router = $router;
+        return $this
+    }
 
-	/**
-	 * Set the request object.
-	 * @param Redline\Request
-     * @return Redline\Application Fluent interface
-	 */
-	public function setRequest(Redline\Request $request)
-	{
-		$this->request = $request;
-		return $this;
-	}
 
-	/**
-	 * Returns the routing mapper object.
-	 * @return Redline\Router\Mapper
-	 */
-	public function getRouter()
-	{
-		if (empty($this->router)) {
-			$this->router = new Redline\Router\Mapper($this->getRequest());
-		}
-		return $this->router;
-	}
+    /**
+     * Get or set global view object.
+     *
+     * @param Reline\View $view
+     * @return Redline\View when getting
+     * @return Redline\Application when setting for fluent interface
+     */
+    public function view(Redline\View $view = null)
+    {
+        if (is_null($view)) {
+            if (empty($this->view)) {
+                $this->view = new Redline\View();
+            }
+            return $this->view;
+        }
+        $this->view = $view
+        return $this;
+    }
+    
+    /**
+     * Register modules to be used in the application.
+     *
+     * @param array $modules array of Module objects, one for each module to register.
+     * @return Redline\Application fluent interface
+     */
+    public function registerModules(array $modules)
+    {
+        foreach ($modules as $name => $module) {
+            
+            if (!($module instanceof Redline\ModuleInterface)) {
+                throw new InvalidArgumentException('Objects passed must be an instance of Redline\ModuleInterface.');
+            }
+            if (is_numeric($name)) {
+                $name = $module->getName();
+            }
+            if (isset($this->modules[$name])) {
+                throw new RuntimeException('Attempt to use same name for two modules is not allowed.');
+            }
+            
+            $this->modules[$name] = $module;
+        }
+        return $this;
+    }
+    
+    /**
+     * Return all of the registered modules.
+     *
+     * @return array
+     */
+    public function getModules()
+    {
+        return $this->modules;
+    }
 
-	/**
-	 * Set the routing mapper object.
-	 * @param Redline\Router\Mapper
-	 * @return Redline\Application Fluent interface
-	 */
-	public function setRouter(Redline\Router\Mapper $router)
-	{
-		$this->router = $router;
-		return $this;
-	}
+    /**
+     * Return a Module object by name.
+     *
+     * You can test whether a module is registered by checking for a null return value.
+     *
+     * @param string $name
+     * @return ModuleInterface|null
+     */
+    public function getModule($name)
+    {
+        return (isset($this->modules[$name])) ? $this->modules[$name] : null;
+    }
 
-	/**
-	 * Return the an object representing the current user.
-	 * @return Tm_UserModel
-	 */
-	public function getUser()
-	{
-		if (!isset($this->user)) {
-			throw new LogicException("User object not set in class Tm_ApplicationController.");
-		}
-		return $this->user;
-	}
+    /**
+     * Convinience function to load routes from a file such as app/config/routes.php.
+     *
+     * This is a separate function so that the only two variables in the local scope when
+     * including the file are $mapper and $__file.
+     *
+     * @param string $__file A file name to load.
+     * @return void
+     */
+    public function loadRoutesFromFile($__file)
+    {
+        $mapper = $this->container['router'];
+        
+        include_once $__file;
+    }
+                        
+    /**
+     * View a frontend page.
+     *
+     * @return void
+     * @throws Exception
+     */
+    public function runFront()
+    {
+        $controller = $this->loadController('Page');
+        try {
+            if ($this->request->fetchVar('preview', false) && 
+                $theme = $this->request->fetchVar('theme', '')) {
+                if (!$this->userLoggedIn()) {
+                    throw new Exception("Not allowed to preview theme if not logged in", ERR_NOT_FOUND);
+                }
+                $this->view->setPaths($theme);
+            } else {
+                $this->view->setPaths($this->config['theme']);
+            }
+            $controller->viewAction();
+            $this->view->renderLayout();
+        } catch (Exception $e) {
+            $this->handleException($e);
+        }
+    }
 
-	/**
-	 * Returns the global view object.
-	 * @return Redline\View
-	 */
-	public function getView()
-	{
-		if (empty($this->view)) {
-			$this->view = new Redline\View;
-		}
-		return $this->view;
-	}
+    /**
+     * Run the dispatch loop, calling the action controller and method for Admin section.
+     *
+     * @returm void
+     * @throws Exception
+     */
+    public function runAdmin()
+    {
+        // Localize dependencies and make sure they are set.
+        $request = $this->getRequest();
+        $router = $this->getRouter();
+        $view = $this->getView();
 
-	/**
-	 * Set the view object.
-	 * @param Redline\View
-	 * @return Redline\Application Fluent interface
-	 */
-	public function setView(Redline\View $view)
-	{
-		$this->view = $view;
-		return $this;
-	}
+        try {
+            $router->route();
 
-	/**
-	 * View a frontend page.
-	 *
-	 * @return void
-	 * @throws Exception
-	 */
-	public function runFront()
-	{
-		$controller = $this->loadController('Page');
-		try {
-			if ($this->request->fetchVar('preview', false) && 
-				$theme = $this->request->fetchVar('theme', '')) {
-				if (!$this->userLoggedIn()) {
-					throw new Exception("Not allowed to preview theme if not logged in", ERR_NOT_FOUND);
-				}
-				$this->view->setPaths($theme);
-			} else {
-				$this->view->setPaths($this->config['theme']);
-			}
-			$controller->viewAction();
-			$this->view->renderLayout();
-		} catch (Exception $e) {
-			$this->handleException($e);
-		}
-	}
+            $controller = $this->loadController($router->getController());
 
-	/**
-	 * Run the dispatch loop, calling the action controller and method for Admin section.
-	 *
-	 * @returm void
-	 * @throws Exception
-	 */
-	public function runAdmin()
-	{
-		// Localize dependencies and make sure they are set.
-		$request = $this->getRequest();
-		$router = $this->getRouter();
-		$view = $this->getView();
+            $action = strtolower($router->getAction()) . 'Action';
 
-		try {
-			$router->route();
+            $view->setPaths($router->getController());
+                
+            if (method_exists($controller, $action)) {
+                $controller->$action();
+            } else {
+                throw new Exception("Not a valid action.", ERR_NOT_FOUND);
+            }
 
-			$controller = $this->loadController($router->getController());
+            if (!$request->isAsync()) {
+                $view->renderLayout();
+            }
+        } catch (Exception $e) {
+            $this->handleException($e);
+        }
+    }
 
-			$action = strtolower($router->getAction()) . 'Action';
+    /**
+     * Load a controller class and populate it with the proper dependencies.
+     * @param string $controller
+     * @return ControllerAbstract
+     */
+    public function loadController($controller)
+    {
+        $filename = ucfirst($controller) . 'Controller';
+        $core_file = APP_PATH . 'Controllers' . DS . $filename . '.php';
+        $plugin_file = PLUGIN_PATH . $controller . DS . $filename . '.php';
+        
+        if (file_exists($core_file)) {
+            include_once $core_file;
+            $class = 'Tm_' . $filename;
+        } elseif (file_exists($plugin_file)) {
+            include_once $plugin_file;
+            $class = $filename;
+        } else {
+            throw new Exception("Controller class file '$filename' not found.", ERR_NOT_FOUND);
+        }
 
-			$view->setPaths($router->getController());
-				
-			if (method_exists($controller, $action)) {
-				$controller->$action();
-			} else {
-				throw new Exception("Not a valid action.", ERR_NOT_FOUND);
-			}
+        return new $class($this, $this->getRequest(), $this->getView());
+    }
 
-			if (!$request->isAsync()) {
-				$view->renderLayout();
-			}
-		} catch (Exception $e) {
-			$this->handleException($e);
-		}
-	}
+    /**
+     * Load a model class and populate it with proper dependencies.
+     * @param string $model
+     * @return ModelAbstract
+     */
+    public function loadModel($model)
+    {
+        $filename = ucfirst($model);
+        $file = APP_PATH . 'Models' . DS . $filename . '.php';
+        $class = 'Tm_' . $filename;
+        if (file_exists($file)) {
+            include_once $file;
+        } else {
+            throw new Exception("Model class '$class' not found.", ERR_FATAL);
+        }
 
-	/**
-	 * Load a controller class and populate it with the proper dependencies.
-	 * @param string $controller
-	 * @return ControllerAbstract
-	 */
-	public function loadController($controller)
-	{
-		$filename = ucfirst($controller) . 'Controller';
-		$core_file = APP_PATH . 'Controllers' . DS . $filename . '.php';
-		$plugin_file = PLUGIN_PATH . $controller . DS . $filename . '.php';
-		
-		if (file_exists($core_file)) {
-			include_once $core_file;
-			$class = 'Tm_' . $filename;
-		} elseif (file_exists($plugin_file)) {
-			include_once $plugin_file;
-			$class = $filename;
-		} else {
-			throw new Exception("Controller class file '$filename' not found.", ERR_NOT_FOUND);
-		}
+        return new $class($this);
+    }
 
-		return new $class($this, $this->getRequest(), $this->getView());
-	}
+    /**
+     * Load a plugin class and populate it with proper dependencies.
+     * @param string $name
+     * @return
+     */
+    public function loadPlugin($name)
+    {
+    }
 
-	/**
-	 * Load a model class and populate it with proper dependencies.
-	 * @param string $model
-	 * @return ModelAbstract
-	 */
-	public function loadModel($model)
-	{
-		$filename = ucfirst($model);
-		$file = APP_PATH . 'Models' . DS . $filename . '.php';
-		$class = 'Tm_' . $filename;
-		if (file_exists($file)) {
-			include_once $file;
-		} else {
-			throw new Exception("Model class '$class' not found.", ERR_FATAL);
-		}
+    /**
+     * Handle exceptions called during dispatch/action cycle and display error page to user.
+     * @param Exception $e
+     * @return void
+     */
+    public function handleException($e)
+    {
+        $controller = $this->loadController('error');
+        $controller->defaultAction($e);
+        $this->view->setPaths('error');
+        $this->view->addStylesheet('main.css');
+        $this->view->current_lang = 'en_US';
+        $this->view->renderLayout('error.php');
+        exit;
+        // Render
+        // echo $e; // Force __toString()
+    }
 
-		return new $class($this);
-	}
+    public function userLoggedIn()
+    {
+        if (!isset($this->user)) {
+            $this->user = $this->loadModel('User');
+            if (isset($_COOKIE[AUTH_COOKIE_NAME]) &&
+                $this->authenticateCookie($_COOKIE[AUTH_COOKIE_NAME])) {
+                $return = true;
+            } else {
+                $return = false;
+            }
+            Tm_Locale::setup($this->getUser(), $this->getConfig());
+            return $return;
+        }
+        return ($this->user->id != 'ANONYMOUS');
+    }
 
-	/**
-	 * Load a plugin class and populate it with proper dependencies.
-	 * @param string $name
-	 * @return
-	 */
-	public function loadPlugin($name)
-	{
-	}
+    /**
+     * Authenticate the user by checking the authentication cookie.
+     * @param string $cookie Authentication cookie value.
+     * @return bool
+     */
+    public function authenticateCookie($cookie)
+    {
+        $parts = explode(':', $cookie);
+        if (count($parts) != 3) {
+            return false;
+        }
 
-	/**
-	 * Handle exceptions called during dispatch/action cycle and display error page to user.
-	 * @param Exception $e
-	 * @return void
-	 */
-	public function handleException($e)
-	{
-		$controller = $this->loadController('error');
-		$controller->defaultAction($e);
-		$this->view->setPaths('error');
-		$this->view->addStylesheet('main.css');
-		$this->view->current_lang = 'en_US';
-		$this->view->renderLayout('error.php');
-		exit;
-		// Render
-		// echo $e; // Force __toString()
-	}
+        list($username, $expiration, $cookie_hmac) = $parts;
 
-	public function userLoggedIn()
-	{
-		if (!isset($this->user)) {
-			$this->user = $this->loadModel('User');
-			if (isset($_COOKIE[AUTH_COOKIE_NAME]) &&
-				$this->authenticateCookie($_COOKIE[AUTH_COOKIE_NAME])) {
-				$return = true;
-			} else {
-				$return = false;
-			}
-			Tm_Locale::setup($this->getUser(), $this->getConfig());
-			return $return;
-		}
-		return ($this->user->id != 'ANONYMOUS');
-	}
+        $expired = $expiration;
 
-	/**
-	 * Authenticate the user by checking the authentication cookie.
-	 * @param string $cookie Authentication cookie value.
-	 * @return bool
-	 */
-	public function authenticateCookie($cookie)
-	{
-		$parts = explode(':', $cookie);
-		if (count($parts) != 3) {
-			return false;
-		}
+        // Allow a grace period for POST and AJAX requests
+        if ($this->request->isPost() || $this->request->isAsync()) {
+            $expired += 1800;
+        }
 
-		list($username, $expiration, $cookie_hmac) = $parts;
+        if ($expired < time()) {
+            return false;
+        }
 
-		$expired = $expiration;
+        $input = $username . ':' . $expiration . ':' . $_SERVER['REMOTE_ADDR'];
 
-		// Allow a grace period for POST and AJAX requests
-		if ($this->request->isPost() || $this->request->isAsync()) {
-			$expired += 1800;
-		}
+        $key = hash_hmac('sha1', $input, COOKIE_SALT);
+        $calc_hmac = hash_hmac('sha1', $input, $key);
 
-		if ($expired < time()) {
-			return false;
-		}
+        if ($cookie_hmac == $calc_hmac) {
+            if ($this->user->findByUsername($username)) {
+                return true;
+            }
+        }
+        return false;
+    }
 
-		$input = $username . ':' . $expiration . ':' . $_SERVER['REMOTE_ADDR'];
+    /**
+     * Send headers for a cachable file.
+     * @param int $expires Unix timestamp representing the expiration of the page cache.
+     * @return void
+     */
+    public static function cacheHeaders($expires)
+    {
+        header('Expires: ' . gmdate('D, d M Y H:i:s', $expires) . ' GMT');
+    /*  header('Last-Modified: ' . Tm_DateTime::toHttpDate($lastmodified));   */
+    }
 
-		$key = hash_hmac('sha1', $input, COOKIE_SALT);
-		$calc_hmac = hash_hmac('sha1', $input, $key);
-
-		if ($cookie_hmac == $calc_hmac) {
-			if ($this->user->findByUsername($username)) {
-				return true;
-			}
-		}
-		return false;
-	}
-
-	/**
-	 * Send headers for a cachable file.
-	 * @param int $expires Unix timestamp representing the expiration of the page cache.
-	 * @return void
-	 */
-	public static function cacheHeaders($expires)
-	{
-		header('Expires: ' . gmdate('D, d M Y H:i:s', $expires) . ' GMT');
-	/*	header('Last-Modified: ' . Tm_DateTime::toHttpDate($lastmodified));	  */
-	}
-
-	/**
-	 * Send headers to prevent caching of the page or data.
-	 * @return void
-	 */
-	public static function noCacheHeaders()
-	{
-		header('Cache-Control: no-cache, no-store, must-revalidate');
-		header('Pragma: no-cache');
-		header('Expires: 0');
-	}
+    /**
+     * Send headers to prevent caching of the page or data.
+     * @return void
+     */
+    public static function noCacheHeaders()
+    {
+        header('Cache-Control: no-cache, no-store, must-revalidate');
+        header('Pragma: no-cache');
+        header('Expires: 0');
+    }
 }

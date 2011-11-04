@@ -202,12 +202,12 @@ class Request
      * @param string $default A default value if the given name is not present.
      * @return string
      */
-	public function cookies($name = null, $default = null)
+    public function cookies($name = null, $default = null)
     {
         return $this->valueOrAll('cookies', $name, $default);
     }
 
-	public function files($name)
+    public function files($name)
     {
         return (isset($_FILES[$name]) ? $_FILES[$name] : array());
     }
