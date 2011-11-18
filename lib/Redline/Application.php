@@ -25,13 +25,20 @@ use Redline\Config,
     Redline\ClassLoader,
     Redline\Request,
     Redline\Response,
-    Redline\Router\Mapper,
+    Redline\Router\Router,
     Redline\View;
 
 /**
  * Master class for interaction with the framework.
  *
  * @package RedlineFramework
+ *
+ * @property Redline\Config $config
+ * @property Redline\Loader $loader
+ * @property Redline\Request $request
+ * @property Redline\Reponse $response
+ * @property Redline\Router\Router $router
+ * @property Redline\View $view
  */
 class Application
 {
@@ -89,39 +96,11 @@ class Application
     public function __construct($env)
     {
         $this->env = $env;
-        
-        $container = new Pimple();
-
-        $container['config'] = function() {
-            return new Config();
-        };
-
-        $container['loader'] = function() {
-            return new ClassLoader();
-        };
-
-        $container['request'] = function() {
-            return Request::createFromGlobals();
-        };
-
-        $container['response'] = function() use ($container) {
-            return new Response($container['request']);
-        };
-
-        $container['router'] = function() use ($container) {
-            return new Mapper($container['request']);
-        };
-
-        $container['view'] = function() use ($container) {
-            return new View($container);
-        };
-
-        $this->container = $container;
+        $this->defineDefaultServices();
     }
 
     /**
      * Creates all objects not all ready set and prepares the application to run.
-     * @return void
      */
     public function startup()
     {
@@ -289,13 +268,44 @@ class Application
     }
 
     /**
+     * Creates definitions for default version of services required by the framework.
+     */
+    public function defineDefaultServices()
+    {
+        $container = $this;
+
+        $container['config'] = function() {
+            return new Config();
+        };
+
+        $container['loader'] = function() {
+            return new ClassLoader();
+        };
+
+        $container['request'] = function() {
+            return Request::createFromGlobals();
+        };
+
+        $container['response'] = function() use ($container) {
+            return new Response($container['request']);
+        };
+
+        $container['router'] = function() use ($container) {
+            return new Router($container['request']);
+        };
+
+        $container['view'] = function() use ($container) {
+            return new View($container);
+        };
+    }
+
+    /**
      * Convinience function to load routes from a file such as app/config/routes.php.
      *
      * This is a separate function so that the only two variables in the local scope when
      * including the file are $mapper and $__file.
      *
      * @param string $__file A file name to load.
-     * @return void
      */
     public function loadRoutesFromFile($__file)
     {
@@ -307,7 +317,6 @@ class Application
     /**
      * View a frontend page.
      *
-     * @return void
      * @throws Exception
      */
     public function runFront()

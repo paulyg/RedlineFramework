@@ -245,9 +245,36 @@ class BasicRoute implements RouteInterface
     /**
      * @inheritdoc
      */
-    public function has($name)
+    public function pattern()
     {
-        return false;
+        if (empty($this->pattern)) {
+            $this->compilePattern();
+        }
+        return $this->pattern;
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function path()
+    {
+        return $this->path;
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function method()
+    {
+        return $this->methods;
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function staticPath()
+    {
+        //
     }
 
     /**

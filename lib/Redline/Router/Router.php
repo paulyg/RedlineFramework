@@ -19,35 +19,183 @@
  * You should have received a copy of the GNU General Public License
  * along with Redline PHP Framework. If not, see <http://www.gnu.org/licenses/>.
  */
+namespace Redline\Router;
 
 /**
- * Routing interface
+ * Description of class.
  *
  * @package RedlineFramework
  */
-class Redline_Router
+class Router extends RouteCollectionFactory
 {
-	public function resource($name)
-	{
-	}
+    /**
+     * The schema of the current HTTP request (HTTP or HTTPS)
+     * @var string
+     */
+    protected $schema;
 
-	public function get($pattern, $options)
-	{
-	}
+    /**
+     * The hostname on which this application is running
+     * @var string
+     */
+    protected $hostname;
 
-	public function post($pattern, $options)
-	{
-	}
+    /**
+     * The URL path representing base or entry point of this application
+     * @var string
+     */
+    protected $baseUrlPath;
+    
+    /**
+     * The controller/action to call when the root URL (homepage) is requested.
+     * @var string
+     */
+    protected $rootController;
+    
+    /**
+     * Default params to set when the root URL (homepage) is requested.
+     * @var array
+     */
+    protected $rootDefaults = array();
 
-	public function put($pattern, $options)
-	{
-	}
+    /**
+     * Cache of HTTP methods allowed on matched routes.
+     * @var array
+     */
+    protected $allowed = array();
 
-	public function delete($pattern, $options)
-	{
-	}
+    /**
+     * Object constructor.
+     * @param Redline\Request
+     */
+    public function __construct(Redline\Request $request)
+    {
+        $this->schema = $request->schema();
+        $this->hostname = $request->hostname();
+        $this->baseUrlPath = $request->baseUrlPath();
+    }
 
-	public function connect($pattern, $options)
-	{
-	}
+    /**
+     * Sets the controller & action to call when the root URL, aka homepage, is requested.
+     *
+     * @param string $controller_spec
+     * @param array $defaults
+     */
+    public function root($controller_spec, array $defaults = array())
+    {
+        $this->rootController = $controller_spec;
+        $this->rootDefaults = $defaults;
+    }
+    
+    /**
+     * Add a RouteCollection object that has already been composed.
+     *
+     * This is useful for allowing modules to provide preconfigured RouteCollection that can be added underneath
+     * a single path prefix in one command.
+     *
+     * @param RouteCollection $collection
+     * @param string $path_prefix Optional
+     * @param string $name_prefix Optional
+     */
+    public function addCollection($collection, $path_prefix = '', $name_prefix = '')
+    {
+        if (!empty($path_prefix)) {
+            $collection->setPathPrefix($path_prefix);
+        }
+
+        if (!empty($name_prefix)) {
+            $collection->setNamePrefix($name_prefix);
+        }
+
+        $this->routes[] = $collection;
+    }
+
+    /**
+     * Search for a route that matches the requested URL path.
+     *
+     * @param string $path
+     * @param string $method
+     * @return Route|boolean
+     */
+    public function match($path, $method)
+    {
+        $this->allowed = array();
+        $path = urldecode($path);
+        if ($method == 'HEAD') {
+            $method = 'GET';
+        }
+
+        if ($route = $this->matchCollection($path, $this->routes)) {
+            return $route;
+        }
+
+        throw 0 < count($this->allowed)
+            ? new MethodNotAllowedException(array_unique(array_map('strtoupper', $this->allowed)))
+            : new ResourceNotFoundException();
+    }
+
+    /**
+     * Internal method allowing to recursivly iterate over RouteCollection objects.
+     *
+     * @param string $path
+     * @param string $method
+     * @param Traversable $routes
+     * @return Route|boolean
+     */
+    protected function matchCollection($path, $method, $routes)
+    {
+        foreach ($routes as $name => $route) {
+            if ($route instanceof RouteCollection) {
+                $prefix = $route->getPathPrefix();
+                if (false === strpos($prefix, '{') &&
+                    $prefix !== substr($path, 0, strlen($prefix))) {
+                    continue;
+                }
+
+                if ($ret = $this->routeColletion($path, $route)) {
+                    return $ret;
+                }
+            }
+
+            if ($route->match($path)) {
+                if (!in_array($method, $route->methods()) {
+                    $this->allowed = array_merge($this->allowed, $route->methods());
+                    continue;
+                }
+
+                return $route;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Create a URL, absolute path only, for a named route with the given parameter values.
+     *
+     * @param string $name
+     * @param array $params
+     * @return string
+     */
+    public function pathFor($name, $params = array())
+    {
+        if (null === $route = $this->getRoute($name)) {
+            throw new RuntimeException("A route with the name '$name' could not be found.");
+        }
+
+        return $this->baseUrlPath . $route->build($params);
+    }
+
+    /**
+     * Create a URL, inclusing hostname & scheme, for a named route with the given parameter values.
+     *
+     * @param string $name
+     * @param array $params
+     * @return array
+     */
+    public function urlFor($name, $params = array())
+    {
+        // pathFor will throw an exception for us if $name doesn't exist
+        return $this->schema . $this->hostname . $this->pathFor($name, $params);
+    }
 }
