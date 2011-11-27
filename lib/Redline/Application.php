@@ -300,6 +300,19 @@ class Application
     }
 
     /**
+     * Convinience function for loading a config file and merging it into the Config instance.
+     *
+     * The file should return an array that can be passed to Config::merge().
+     *
+     * @param string $_file The config file name.
+     */
+    public function loadConfig($_file)
+    {
+        $values = include $_file;
+        $this->config->merge($values);
+    }
+
+    /**
      * Convinience function to load routes from a file such as app/config/routes.php.
      *
      * This is a separate function so that the only two variables in the local scope when
@@ -307,11 +320,11 @@ class Application
      *
      * @param string $__file A file name to load.
      */
-    public function loadRoutesFromFile($__file)
+    public function loadRoutes($_file)
     {
-        $mapper = $this->container['router'];
+        $router = $this->container['router'];
         
-        include_once $__file;
+        include_once $_file;
     }
                         
     /**
