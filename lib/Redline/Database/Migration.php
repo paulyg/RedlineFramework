@@ -21,7 +21,7 @@
  */
 namespace Redline\Database;
 
-// use Redline\<foo> as <bar>;
+use Redline\Database\Migration;
 
 /**
  * Provides simplified interface for creating/modifying/deleting database tables, columns, and indicies.
@@ -75,39 +75,87 @@ class Migration
 	}
 
 	/**
-	 * Short description of function.
-	 *
-	 * Long description of function. If only short description is used params list can
-	 * come right after short description without a blank line separating them. Wrap
-	 * code examples in
-	 * <code></code>
-	 * tags on their own lines. Wrap text at approx 85-90 chars.
-	 *
-	 * @param type $name Short description
-	 * @param type $args This parameter has a long description. The description can wrap
-	 * to multiple lines if necessary. Unless the arg list is long (discouraged) you do
-	 * not have to justify the start of the descriptions to all line up. Furthermore you do
-	 * not have to indent the beginning of the wrapped lines unless you justify the start.
-	 * @throws \Exception|Redline\Exception|\LogicException|\DomainException|\InvalidArgumentException|\BadMethodCallExcpetion|\RuntimeException
-	 * @return type
+	 * Class diagragm of Migration feature:
+     * Migration consists of multiple actions:
+     *     Create Table - Class
+     *         Add Columns - Class
+     *         Add Indexes - Class
+     *     Alter Table - Class
+     *         Rename Table
+     *         Add Column - Class
+     *         Drop Column
+     *         Redefine Column - Class
+     *             Rename Column
+     *             Change Type
+     *             Change Default
+     *             Change Unique
+     *             Change Null
+     *             Change Charset or Collation
+     *     Drop Table - simple action
+     *     Add Index - somewhat simple action - Class
+     *     Remove Index - simple action
 	 */
-	public function createTable($name, $args)
+	public function createTable($name)
 	{
+        $action = 'create_table_' . $name;
+        if (isset($this->actions[$action])) {
+            throw new InvalidArgumentException("A definition to create table '$name' already exists.");
+        }
+
+        return $this->actions[$action] = new Migration\CreateTable($name);
 	}
 
-	public function alterTable() { }
+	public function alterTable($name)
+    {
+        $action = 'alter_table_' . $name;
+        if (isset($this->actions[$action])) {
+            throw new InvalidArgumentException("A definition to alter table '$name' already exists.");
+        }
 
-	public function dropTable() { }
+        return $this->actions[$action] = new Migration\AlterTable($name);
+    }
 
-	public function addColumn() { }
+	public function dropTable($name)
+    {
+        $action = 'drop_table_' . $name;
+        if (isset($this->actions[$action])) {
+            throw new InvalidArgumentException("A command to drop table '$name' already exists.");
+        }
 
-	public function alterColumn() { }
+        return $this->actions[$action] = new Migration\DropTable($name);
+    }
 
-	public function renameColumn() { }
+	public function addIndex($table, $name)
+    {
+        $action = 'create_index_' . $table . '_' . $name;
+        if (isset($this->actions[$action])) {
+            throw new InvalidArgumentException("A definition to create index '$name' on table '$table' already exists.");
+        }
 
-	public function dropColumn() { }
+        $alter_action = 'alter_table_' . $table;
+        if (!isset($this->actions[$alter_action])) {
+            $alter_object = $this->alterTable($table);
+        } else {
+            $alter_object = $this->actions[$alter_action];
+        }
 
-	public function addIndex() { }
+        return $this->actions[$action] = $alter_object->addIndex($name);
+    }
 
-	public function removeIndex() { }
+	public function removeIndex($table, $name)
+    {
+        $action = 'remove_index_' . $table . '_' . $name;
+        if (isset($this->actions[$action])) {
+            throw new InvalidArgumentException("A command to remove index '$name' on table '$table' already exists.");
+        }
+
+        $alter_action = 'alter_table_' . $table;
+        if (!isset($this->actions[$alter_action])) {
+            $alter_object = $this->alterTable($table);
+        } else {
+            $alter_object = $this->actions[$alter_action];
+        }
+
+        return $this->actions[$action] = $alter_object->removeIndex($name);
+    }
 }

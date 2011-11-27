@@ -21,64 +21,39 @@
  */
 namespace Redline\Orm;
 
-use Redline\Database as DB;
+use Redline\Database as DB,
+    IteratorAggregate,
+    PDO;
 
 /**
  * Lets you work with multiple records from a database table at once.
  *
  * @package RedlineFramework
  */
-class RecordSet implements \Iterator, \Countable
+class RecordSet implements IteratorAggregate
 {
 	protected $className;
 
     protected $results;
 
-    protected $position = 0;
-
-	protected $current;
-
-    public function __construct($results, $className, $count)
+    public function __construct($results, $className)
     {
         $results->setFetchMode(PDO::FETCH_CLASS, $className);
         $this->results = $results;
         $this->className = $className;
-        $this->count = $count;
     }
 
-    public function current()
+    // Thanks to Doctrine2 for this one!
+    public function getIterator()
     {
-        return $this->current;
+        return $results;
     }
 
-    public function key()
+    public function updateAll()
     {
-        return $this->position;
     }
 
-    public function next()
-    {
-        $this->current = $this->results->fetchRow(PDO::FETCH_CLASS);
-        $this->position++;
-    }
-
-    public function rewind()
-    {
-        // no op! Can't rewind PDOStatement
-    }
-
-    public function valid()
-    {
-        return (bool) $this->current;
-    }
-
-    public function count()
-    {
-        return $this->count;
-    }
-
-
-	public function delete()
+	public function deleteAll()
 	{
 	}
 
