@@ -175,7 +175,7 @@ class View
 	}
 
 	/**
-	 * Assign multiple template variables at once.
+	 * Set multiple template variables at once.
 	 *
 	 * The parameter may be an associative array of 'variable_name' => 'variable_value'
 	 * pairs or an object. If an object is passed all public variables will be assigned
@@ -185,28 +185,20 @@ class View
 	 * @return bool
 	 * @throws InvalidArgumentException on incorrect parameter type or setting private variable.
 	 */
-	public function assign($vars)
+	public function merge($vars)
 	{
-		if (is_array($vars)) {
-			foreach ($vars as $key => $val) {
-				if (is_string($key)) {
-					$this->__set($key, $val);
-				}
-			}
-			return true;
-		} elseif (is_object($vars)) {
-			foreach (get_object_vars($vars) as $key => $val) {
-				$this->__set($key, $val);
-			}
-			return true;
-		} else {
-			$type = gettype($vars);
-			throw new InvalidArgumentException("Only an array or object may be passed to View:assign(). You passed '$type'.");
-		}
+        if (is_array($vars)) {
+            $this->vars = array_replace($this->vars, $vars);
+        } elseif (is_object($vars)) {
+            $this->vars = array_replace($this->vars, get_object_vars($vars));
+        } else {
+            $type = gettype($vars);
+            throw new InvalidArgumentException("Only an array or object may be passed to View:assign(). You passed '$type'.");
+        }
 	}
 
     /**
-     * Replace the current template variables with a new set.
+     * Replace the current template variables with a new set. Removes all current vars.
      *
      * @param array|object $vars
      * @throws InvalidArgumentException on incorrect parameter type or setting private variable.
@@ -226,9 +218,17 @@ class View
      *
      * @return array
      */
-    public function retreive()
+    public function all()
     {
         return $this->vars;
+    }
+
+    /**
+     * Remove all currently assigned template variables.
+     */
+    public function clear()
+    {
+        $this->vars = array();
     }
 
     /**
