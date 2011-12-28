@@ -27,6 +27,12 @@ namespace Redline;
  */
 class View
 {
+    /**
+     * Holds a map of Helper "shortnames" to full class names.
+     * @var array
+     */
+    static protected $helperClasses = array();
+
 	/**
 	 * Holds a reference to the Redline\Application object to pass to Helpers.
 	 * @var Redline\Application
@@ -44,6 +50,12 @@ class View
 	 * @var array
 	 */
 	protected $vars = array();
+
+	/**
+	 * Collection of helper objects.
+	 * @var array
+	 */
+	protected $helpers = array();
 
 	/**
 	 * Paths to view scripts (for a controller action).
@@ -64,12 +76,6 @@ class View
 	protected $layout_path = '';
 
 	/**
-	 * Collection of helper objects.
-	 * @var Redline\PluginLoader
-	 */
-	protected $helpers;
-
-	/**
 	 * Beginning part of all URLs.
 	 * @var string
 	 */
@@ -87,27 +93,91 @@ class View
 	 */
 	protected $themeUrl = '';
 
+    /**
+     * Register a class to a given helper name.
+     *
+     * @param string $name
+     * @param string $class
+     */
+    static public function registerHelper($name, $class)
+    {
+        static::$helperClasses[strtolower($name)] = $class;
+    }
+
+    /**
+     * Register multiple helper classes at once.
+     *
+     * @param array $helpers Map in the form 'shortname' => 'class name'
+     */
+    static public function registerHelpers($helpers)
+    {
+        foreach ($helpers as $name => $class) {
+            static::registerHelper($name, $class);
+        }
+    }
+
+    /**
+     * Remove a Helper from the list of Helpers.
+     *
+     * @param string $name
+     */
+    static public function unregisterHelper($name)
+    {
+        $name = strtolower($name);
+        if (array_key_exists($name, static::$helperClasses)) {
+            unset(static::$helperClasses[$name]);
+        }
+    }
+
+    /**
+     * Is a Helper registered?
+     *
+     * @param string $name
+     */
+    static public function isRegistered($name)
+    {
+        return isset(static::$helperClasses[strtolower($name)]);
+    }
+
 	/**
 	 * Object Constructor.
-	 * @param Redline\Request $request
 	 * @param Redline\Application $app
+	 * @param Redline\Request $request
 	 * @return Redline\View
 	 */
-	public function __construct(Redline\Request $request, Redline\Application $app)
+	public function __construct(Application $app, Request $request)
 	{
+        $this->app = $app;
 		$this->request = $request;
-		$this->app = $app;
 	}
 
 	/**
 	 * Magic method for view helpers or decorators.
-	 * @return string
+     *
+     * @param string $name
+     * @param array $args
+	 * @return object
 	 * @throws BadMethodCallException
 	 */
-	public function __call($helper)
+	public function __call($name, $args)
 	{
-		$loader = $this->getHelperManager();
-        return $loader->load($helper);
+		if (!$this->isRegistered($name)) {
+            throw new BadMethodCallException("View Helper '$name' is not registered. Can not create instance.");
+        }
+
+        $name = strtolower($name);
+
+        if (!isset($this->helpers[$name])) {
+            $class = static::$helperClasses[$name];
+            $helper = $this->helpers[$name] = new $class($this->app);
+        } else {
+            $helper = $this->helpers[$name];
+        }
+
+        if (count($args > 0)) {
+            return call_user_func_array(array($helper, '__invoke'), $args);
+        }
+        return $helper;
 	}
 
 	/**
@@ -151,20 +221,7 @@ class View
 		unset($this->vars[$key]);
 	}
 
-    public function getHelperManager()
-    {
-        if (!isset($this->helpers)) {
-            $this->helpers = new PluginLoader();
-        }
-        return $this->helpers;
-    }
-
-    public function setHelperManager(Redline\PluginLoader $loader)
-    {
-        $this->helpers = $loader;
-    }
-
-	/**
+ 	/**
 	 * Set the path to folder with view scripts to be rendered.
 	 * @param string $path
 	 */

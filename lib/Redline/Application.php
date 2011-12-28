@@ -91,11 +91,21 @@ class Application
     public $view;
 
     /**
-     * Object constructor. Sets up defaults for Pimple DI container.
+     * Object constructor.
+     *
+     * Accepts configuration options for the core framework sets up defaults for the
+     * service container.
+     *
+     * Configuration keys:
+     * - 'env' => an environment string that affects which config files are loaded, default empty
+     * - 'namespaced_application' => whether code in the 'app/' folder is namespaced, default true
+     * - 'app_namespace_prefix' => a namespace prefix to apply to all code in the 'app/' folder.
+     *
+     * @param array $config
      */
-    public function __construct($env)
+    public function __construct(array $config = array())
     {
-        $this->env = $env;
+        $this->config = new Config($config);
         $this->defineDefaultServices();
     }
 
@@ -326,7 +336,48 @@ class Application
         
         include_once $_file;
     }
-                        
+
+    /**
+     * Parses the controller specification strings found in routes.
+     *
+     * The specification string is split into a class and action. Any module
+     * references are replaced with the module's namespace resulting in a
+     * fully qualified class name. The return array is the same format as
+     * as expected by call_user_func_array & friends.
+     *
+     * @param string $spec
+     * @return array
+     */
+    public function resolveControllerSpec($spec)
+    {
+        if (substr_count($spec, '#') !== 1) {
+            throw new Exception("The controller specification '$spec' does not contain a controller class and action seperated by the '#' character.");
+        }
+        list($controller, $action) = explode('#', $spec);
+
+        if ($controller[0] == '@') {
+            $pos = strpos($controller, '\\');
+            $name = substr($controller, 1, $pos -1);
+            $controller = substr($controller, $pos);
+            if (! $module = $this->getModule($name)) {
+                throw new Exception("A module with the name '$name' could not be found.");
+            }
+            $base_ns = $module->getNamespace();
+        } else {
+            $base_ns = $this->config['app_namespace_prefix'] ?: '';
+        }
+        
+        if ($this->config['namespaced_app']) {
+            $controller = '\\Controller\\' . ltrim($controller, '\\') . 'Controller';
+        } else {
+            $controller = 'Controller_' . $controller . 'Controller';
+        }
+        $controller = $base_ns . $controller;
+        $controller = ltrim($controller, '\\');
+
+        return array($controller, $action);
+    }
+
     /**
      * View a frontend page.
      *

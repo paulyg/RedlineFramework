@@ -21,12 +21,14 @@
  */
 namespace Redline;
 
+use ArrayAccess, IteratorAggregate;
+
 /**
  * Manages configuration options for the framework, application, or your own code.
  *
  * @package Redline
  */
-class Config implements \ArrayAccess
+class Config implements ArrayAccess, IteratorAggregate
 {
 	/**
 	 * Holds all of the config keys and values.
@@ -137,9 +139,44 @@ class Config implements \ArrayAccess
     /**
      * Return values based on a pattern search of the config keys
      * @param string $pattern
+     * @return array
      */
     public function filter($pattern)
     {
+        $pattern = (string) $pattern;
+        if (substr($pattern, -1) == '*') {
+            $pattern = substr($pattern, 0, -1);
+        }
+        if (substr($pattern, -1 != '.')) {
+            $pattern .= '.';
+        }
+        $len = strlen($pattern);
+
+        $return = array();
+
+        /*
+        $iterator = new CallbackFilterIterator(
+            new ArrayIterator($this->values),
+            function($v, $k, $it) use ($pattern, $len) {
+                return ($pattern === substr($k, 0, $len));
+            }
+        );
+        foreach ($iterator as $key => $val) {
+            $key = substr($key, $len);
+            $return[$k] = $val;
+        }
+        */
+        array_walk(
+            $this->values,
+            function($v, $k) use ($pattern, $len, &$return) {
+                if ($pattern === substr($k, 0, $len)) {
+                    $k = substr($k, $len);
+                    $return[$k] = $v;
+                }
+            }
+        );
+
+        return $return
     }
 
 	/** ArrayAccess Methods */
@@ -165,4 +202,9 @@ class Config implements \ArrayAccess
 	{
 		unset($this->values[$offset]);
 	}
+
+    public function getIterator()
+    {
+        return $this->values;
+    }
 }

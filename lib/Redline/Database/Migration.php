@@ -31,69 +31,65 @@ use Redline\Database\Migration;
 class Migration
 {
 	/**
-	 * Description of prop1
-	 * @var string
-	 */
-	public static $prop1;
-
-	/**
-	 * Description of prop2
-	 * @var boolean
-	 */
-	protected static $prop2 = false;
-
-	/**
-	 * Description of prop3
-	 * @var integer
-	 */
-	private static $prop3;
-
-	/**
-	 * Description of prop4
+	 * List of actions to perform on the database.
 	 * @var array
 	 */
-	public $prop4 = array();
+	protected $actions = array();
 
 	/**
-	 * Description of prop5
-	 * @var Redline\subpackage\class
+	 * The database connection.
+	 * @var Connection
 	 */
-	protected $prop5;
+	protected $conn;
 
 	/**
-	 * Description of prop6
-	 * @var Some_Other_Class
+	 * The name of the database driver (brand).
+	 * @var string
 	 */
-	private $prop6;
+	protected $driver;
+
+	/**
+	 * SQL generator for the driver/connection.
+	 * @var Migration\SQL\Generator
+	 */
+	protected $sql;
 
 	/**
 	 * Object constructor.
-	 * @param Redline\subpackage\foo\dep_class
+	 * @param Redline\Database\Connection $connection
 	 */
-	public function __construct(<bar>\<dep_class> $dep = null)
+	public function __construct(Connection $connection = null)
 	{
+        if (is_null($connnection)) {
+            $connection = ConnectionManager::getConnection('default');
+        }
+        $driver = $connection->getDriverName();
+        $sql_class = 'Redline\\Database\\Migration\\Sql\\' . ucfirst($driver);
+        $this->sql = new $sql_class;
+        $this->driver = $driver;
+        $this->conn = $connection;
 	}
 
 	/**
 	 * Class diagragm of Migration feature:
      * Migration consists of multiple actions:
-     *     Create Table - Class
-     *         Add Columns - Class
-     *         Add Indexes - Class
-     *     Alter Table - Class
+     *     Create Table - done except SQL
+     *         Add Column - done except SQL & generic type
+     *         Add Index - done except SQL
+     *     Alter Table - done except SQL
      *         Rename Table
-     *         Add Column - Class
+     *         Add Column - see create table
      *         Drop Column
-     *         Redefine Column - Class
+     *         Redefine Column - done except SQL & generic type
      *             Rename Column
      *             Change Type
      *             Change Default
      *             Change Unique
      *             Change Null
      *             Change Charset or Collation
-     *     Drop Table - simple action
-     *     Add Index - somewhat simple action - Class
-     *     Remove Index - simple action
+     *     Drop Table - done
+     *     Add Index - see create table
+     *     Remove Index - done
 	 */
 	public function createTable($name)
 	{
@@ -157,5 +153,20 @@ class Migration
         }
 
         return $this->actions[$action] = $alter_object->removeIndex($name);
+    }
+
+    public function execute()
+    {
+        $db = $this->conn;
+        foreach ($this->actions as $name => $action) {
+            $db->begin();
+            try {
+                $db->execute($action->getSql($this->sql));
+                $db->commit();
+            } catch (Exception $e) {
+                $db->rollback();
+                throw $e;
+            }
+        }
     }
 }
