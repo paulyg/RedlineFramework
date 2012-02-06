@@ -6,20 +6,21 @@ The end goal is to have the following modules/classes:
 * Application (master class for interacting with framework)
 * Request
 * Response
-* Routing(Mapper)
+* Routing
 * View w/ Helpers
 * Loader (Autoloading & plugin/module management)
 * Database Abstraction based on PDO
 * ActiveRecord
+* Database Migrations via command lines
 * AbstractController
 * Validation/Sanitizer
 * Form automation
+* Events/hooks (using Symfony\Component\EventDispatcher for now)
 * HTTP Client
 * Caching (HTML output) & static file generation
 
 The following would be under consideration if I ever get the above done.
 * Filesystem wrapper
-* Event manager (for WordPress style hooks)
 * Locale/I18n
 * Config
 * Logging

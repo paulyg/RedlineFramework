@@ -22,25 +22,43 @@
 namespace Redline;
 
 use Redline\Config,
-    Redline\ClassLoader,
     Redline\Request,
     Redline\Response,
     Redline\Router\Router,
-    Redline\View;
+    Redline\View,
+    paulyg\Vessel,
+    Symfony\Component\ClassLoader\UniversalClassLoader,
+    Symfony\Component\EventDispatcher\Event,
+    Symfony\Component\EventDispatcher\EventDispatcher
+    Symfony\Component\EventDispatcher\EventSubscriberInterface;
 
 /**
  * Master class for interaction with the framework.
  *
+ * Usage:
+ * use Redline\Application;
+ * $app = new Application();
+ * $app->registerModules(array(
+ *    'users' => 'Acme\Redline\UserModule',
+ *    'facebook' => 'Timmy\FacebookConnector'
+ * ));
+ * In Symfony modules are loaded before config (and routing).
+ * $app->loadModules();
+ * $app->loadConfig();
+ * $app->loadRoutes();
+ * $app->run()->send();
+ *
  * @package RedlineFramework
  *
  * @property Redline\Config $config
- * @property Redline\Loader $loader
+ * @property Symfony\Component\ClassLoader\UniversalClassLoader $classLoader
+ * @property Symfony\Component\EventDispatcher\EventDispatcher $eventManager
  * @property Redline\Request $request
  * @property Redline\Reponse $response
  * @property Redline\Router\Router $router
  * @property Redline\View $view
  */
-class Application
+class Application extends Vessel implements EventSubscriberInterface
 {
     /**
      * The global configuration object, see {@link config()}.
