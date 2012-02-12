@@ -29,7 +29,7 @@ use Redline\Config,
     paulyg\Vessel,
     Symfony\Component\ClassLoader\UniversalClassLoader,
     Symfony\Component\EventDispatcher\Event,
-    Symfony\Component\EventDispatcher\EventDispatcher
+    Symfony\Component\EventDispatcher\EventDispatcher,
     Symfony\Component\EventDispatcher\EventSubscriberInterface;
 
 /**
@@ -50,8 +50,8 @@ use Redline\Config,
  *
  * @package RedlineFramework
  *
- * @property Redline\Config $config
  * @property Symfony\Component\ClassLoader\UniversalClassLoader $classLoader
+ * @property Redline\Config $config
  * @property Symfony\Component\EventDispatcher\EventDispatcher $eventManager
  * @property Redline\Request $request
  * @property Redline\Reponse $response
@@ -61,225 +61,148 @@ use Redline\Config,
 class Application extends Vessel implements EventSubscriberInterface
 {
     /**
-     * The global configuration object, see {@link config()}.
-     * @var Redline\Config
+     * Namespace prefix to apply for all classes in the app/ directory.
+     * @var string
      */
-    public $config;
+    protected $appNamespace;
     
     /**
-     * Service container/dependency injection container object, see {@link container()}.
-     * @var Pimple
+     * Class name prefix to apply for all classes in the app/ directory.
+     * @var string
      */
-    public $container;
+    protected $appPrefix;
+    
+    /**
+     * Flag whether to show verbose error messages or not.
+     * @var bool
+     */
+    protected $debug = false;
+    
+    /**
+     * A string representing an operating environment.
+     * @var string
+     */
+    protected $env;
 
     /**
-     * Class loader and module manager, see {@link loader()}.
-     * @var Redline\Loader
-     */
-    public $loader;
-
-    /**
-     * Loaded module classes.
+     * Loaded modules classes.
      * @var array
      */
-    public $modules = array();
-    
-    /**
-     * Global request object, see {@link request()}.
-     * @var Redline\Request
-     */
-    public $request;
+    protected $loadedModules = array();
 
     /**
-     * Global response object, see {@link response()}.
-     * @var Redline\Reponse
+     * Flag to determine if modules loadModules() has been called.
+     * @var boolean
      */
-    public $response;
+    protected $modulesLoaded = false;
     
     /**
-     * The router object, see {@link router()}.
-     * @var Redline\Router\Mapper
+     * An identifier for the application, the name of the directory containing it.
+     * @var string
      */
-    public $router;
+    protected $name;
 
     /**
-     * The view object, see {@link view()}.
-     * @var Redline\View
+     * List of registered modules.
+     * @var array
      */
-    public $view;
+    protected $registeredModules = array();
+    
+    /**
+     * The root of the application on the filesystem.
+     * @var string
+     */
+    public $rootDir;
 
     /**
      * Object constructor.
      *
-     * Accepts configuration options for the core framework sets up defaults for the
+     * Accepts basic configuration options for the core framework sets up defaults for the
      * service container.
      *
-     * Configuration keys:
-     * - 'env' => an environment string that affects which config files are loaded, default empty
-     * - 'namespaced_application' => whether code in the 'app/' folder is namespaced, default true
-     * - 'app_namespace_prefix' => a namespace prefix to apply to all code in the 'app/' folder.
-     *
-     * @param array $config
+     * @param string $root The root of the application on the filesystem.
+     * @param string $ns A namespace prefix to apply to all application classes. Leave empty to use PEAR style naming.
+     * @param string $prefix A class name prefix to apply to all application classes. Leave empty to use namespaced classes.
+     * @param string an environment string that affects which config files are loaded, default empty.
+     * @param boolean A flag to enable debug mode, default false.
      */
-    public function __construct(array $config = array())
+    public function __construct($root = '', $ns = '', $prefix = '', $env = '', $debug = false)
     {
-        $this->config = new Config($config);
+        /*
+        Boot process, how do we accomodate:
+        - include autoloader class file
+        - create autoloader instance
+        - configure autoloader with all framework namespaces
+        - configure autoloader with app namespace or prefix
+        - create application instance
+        - pass list of modules to application
+        - load modules
+        - give modules a chance to add to config keys
+        - give modules a chance to add event hooks
+        - give modules a chance to add view helpers, register css, js
+        - pull in "global" app config
+        - load routes, allowing app author to pull routes from modules if they wish
+        - fire an event indicating the app is ready to run, is this same as the module init?, pre-route?
+        */
+        if ($ns && $prefix) {
+            throw new Exception("You can not declare both a namespace prefix and PEAR style prefix for your classes. Choose only one approach.");
+        }
+        $this->appNamespace = $ns;
+        $this->appPrefix = $prefix;
+        
+        $this->rootDir = realpath($root);
+        if (!is_dir($this->rootDir)) {
+            throw new Exception("The given root directory, $root, is not a valid directory.");
+        }
+        $this->name = basename($this->rootDir);
+        
+        $this->env = $env;
+        $this->debug = $debug;
+        
         $this->defineDefaultServices();
     }
 
     /**
-     * Creates all objects not all ready set and prepares the application to run.
+     * Convenience function that loads modules, loads default configuration file,
+     * loads default routes. You can call these  methods individually instead of
+     * calling boot().
+     *
+     * return Redline\Application fluent interface
      */
-    public function startup()
+    public function boot()
     {
-        foreach ($this->modules as $module) {
-            $module->startup($this->container);
-            if ($mod_config = $module->getConfig()) {
-                $this->container['config']->merge($mod_config);
-            }
-        }
+        $this->loadModules();        
+        $this->loadConfig();
+        $this->loadRoutes();
         
-        $config_files = array(APP_DIR.'/config/config.php', APP_DIR."/config/config-{$this->env}.php");
-        foreach ($config_files as $config_file) {
-            if (file_exists($config_file)) {
-                $this->container['config']->merge(include $config_file);
-            }
-        }
-        
-        if (file_exists($routing_file = APP_DIR.'/config/routes.php')) {
-            $this->loadRoutesFromFile($routing_file);
-        }
-    }
-    
-    /**
-     * Set or get the configuration store.
-     *
-     * @param Redline\Config $config
-     * @return Redline\Config
-     * @return Redline\Application when setting for fluent interface
-     */
-    public function config(Redline\Config $config = null)
-    {
-        if (is_null($config)) {
-            if (empty($this->config)) {
-                $this->config = new Redline\Config();
-            }
-            return $this->config;
-        }
-        return $this->config;
-    }
-
- 
-    /**
-     * Get or set the server request object.
-     *
-     * @param Redline\Request $request
-     * @return Redline\Request
-     * @return Redline\Application when setting for fluent interface
-     */
-    public function request(Redline\Request $request = null)
-    {
-        if (is_null($request)) {
-            if (empty($this->request)) {
-                $this->request = new Redline\Request();
-            }
-            return $this->request;
-        }
-        $this->request = $request;
-        return $this;
-    }
-
-    /**
-     * Get or set the server response object.
-     *
-     * @param Redline\Response $response
-     * @return Reline\Response when getting
-     * @return Redline\Application when setting for fluent interface
-     */
-    public function response(Redline\Response $reponse = null)
-    {
-        if (is_null($reponse)) {
-            if (empty($this->response)) {
-                $this->response = new Redline\Response();
-            }
-            return $this->reponse;
-        }
-        $this->reqsponse = $response;
-        return $this;
-    }
-
-    /**
-     * Get or set the routing mapper object.
-     *
-     * @param Redline\Router\Mapper $router
-     * @return Redline\Router\Mapper when getting
-     * @return Redline\Application when setting for fluent interface
-     */
-    public function router(Redline\Router\Mapper $router = null)
-    {
-        if (is_null($router)) {
-            if (empty($this->router)) {
-                $this->router = new Redline\Router\Mapper($this->request());
-            }
-            return $this->router;
-        }
-    $this->router = $router;
-        return $this
-    }
-
-
-    /**
-     * Get or set global view object.
-     *
-     * @param Reline\View $view
-     * @return Redline\View when getting
-     * @return Redline\Application when setting for fluent interface
-     */
-    public function view(Redline\View $view = null)
-    {
-        if (is_null($view)) {
-            if (empty($this->view)) {
-                $this->view = new Redline\View();
-            }
-            return $this->view;
-        }
-        $this->view = $view
         return $this;
     }
     
     /**
      * Register modules to be used in the application.
      *
-     * @param array $modules array of Module objects, one for each module to register.
+     * @param array $modules Array of Module namespaces/paths.
      * @return Redline\Application fluent interface
      */
     public function registerModules(array $modules)
     {
-        foreach ($modules as $name => $module) {
-            
-            if (!($module instanceof Redline\ModuleInterface)) {
-                throw new InvalidArgumentException('Objects passed must be an instance of Redline\ModuleInterface.');
-            }
-            if (is_numeric($name)) {
-                $name = $module->getName();
-            }
-            if (isset($this->modules[$name])) {
-                throw new RuntimeException('Attempt to use same name for two modules is not allowed.');
-            }
-            
-            $this->modules[$name] = $module;
+        if ($this->modulesLoaded) {
+            trigger_error("Call to Application::registerModules() not allowed after modules have been loaded.", E_USER_NOTICE);
+            return;
         }
+        
+        $this->registeredModules = array_replace($this->registeredModules, $modules);
         return $this;
     }
     
     /**
-     * Return all of the registered modules.
+     * Return all of the loaded modules.
      *
      * @return array
      */
     public function getModules()
     {
-        return $this->modules;
+        return $this->loadedModules;
     }
 
     /**
@@ -292,38 +215,95 @@ class Application extends Vessel implements EventSubscriberInterface
      */
     public function getModule($name)
     {
-        return (isset($this->modules[$name])) ? $this->modules[$name] : null;
+        return (isset($this->loadedModules[$name])) ? $this->loadedModules[$name] : null;
+    }
+    
+    /**
+     * Load modules classes to be used in the application.
+     *
+     * @param array $modules Array of Module namespaces/paths.
+     * @return Redline\Application fluent interface
+     */
+    public function loadModules(array $modules = array())
+    {
+        if ($this->modulesLoaded) {
+            trigger_error("Application::loadModules() called more than once.", E_USER_NOTICE);
+            return;
+        }
+        
+        if (!empty($modules)) {
+            $this->registerModules($modules);
+        }
+
+        foreach ($this->registeredModules as $moduleNS) {
+            
+            $class = trim($moduleNS, '\\') . '\\Module';
+            
+            $path = $this->modulesDir . str_replace('\\', DIRECTORY_SEPARATOR, $class) . '.php';
+            $basePath = $this->moduleDir . str_replace('\\', DIRECTORY_SEPARATOR, $moduleNS);
+            if (!file_exists($path)) {
+                throw new Excpetion("Module file '$path' does not exist.");
+            }
+            
+            require $path;
+            $module = new $class;
+            
+            if (!($module instanceof Redline\ModuleInterface)) {
+                throw new InvalidArgumentException('Objects passed must be an instance of Redline\ModuleInterface.');
+            }
+            
+            $name = $module->getName();
+
+            if (isset($this->loadedModules[$name])) {
+                $firstNS = $this->loadedModules[$name]->getNamespace();
+                throw new RuntimeException("Module name '$name' is already being used by module '$firstNS'.");
+            }
+            
+            $this->classLoader->registerNamespace($moduleNS, $basePath);
+            
+            if (method_exists($module, 'init')) {
+                $module->init($this);
+            }
+            
+            $this->loadedModules[$name] = $module;
+        }
+
+        $this->modulesLoaded = true;
+        
+        return $this;
     }
 
     /**
      * Creates definitions for default version of services required by the framework.
      */
-    public function defineDefaultServices()
+    protected function defineDefaultServices()
     {
-        $container = $this;
-
-        $container['config'] = function() {
+        $this->classLoader = function() {
+            return new UniversalClassLoader();
+        };
+            
+        $this->config = function() {
             return new Config();
         };
 
-        $container['loader'] = function() {
-            return new ClassLoader();
+        $this->eventManager = function() {
+            return new EventDispatcher();
         };
 
-        $container['request'] = function() {
+        $this->request = function() {
             return Request::createFromGlobals();
         };
 
-        $container['response'] = function() use ($container) {
-            return new Response($container['request']);
+        $this->response = function($c) {
+            return new Response($c->request);
         };
 
-        $container['router'] = function() use ($container) {
-            return new Router($container['request']);
+        $this->router = function($c) {
+            return new Router($c->request);
         };
 
-        $container['view'] = function() use ($container) {
-            return new View($container);
+        $this->view = function($t) {
+            return new View($t);
         };
     }
 
@@ -332,27 +312,37 @@ class Application extends Vessel implements EventSubscriberInterface
      *
      * The file should return an array that can be passed to Config::merge().
      *
-     * @param string $_file The config file name.
+     * @param string $__file The config file name, defaults to app/config/config.php.
      */
-    public function loadConfig($_file)
+    public function loadConfig($__file = null)
     {
-        $values = include $_file;
-        $this->config->merge($values);
+        if (is_null($__file)) {
+            $__file = $this->rootDir . 'app/config/config.php';
+        }
+        $__values = include $__file;
+        $this->config->merge($__values);
+        
+        return $this;
     }
 
     /**
      * Convinience function to load routes from a file such as app/config/routes.php.
      *
      * This is a separate function so that the only two variables in the local scope when
-     * including the file are $mapper and $__file.
+     * including the file are $router and $__file.
      *
-     * @param string $__file A file name to load.
+     * @param string $__file A file name to load, defaults to app/config/routes.php.
      */
-    public function loadRoutes($_file)
+    public function loadRoutes($__file = null)
     {
-        $router = $this->container['router'];
+        if (is_null($__file)) {
+            $__file = $this->rootDir . 'app/config/routes.php';
+        }
+        $router = $this->router;
         
-        include_once $_file;
+        include_once $__file;
+        
+        return $this;
     }
 
     /**
@@ -377,208 +367,121 @@ class Application extends Vessel implements EventSubscriberInterface
             $pos = strpos($controller, '\\');
             $name = substr($controller, 1, $pos -1);
             $controller = substr($controller, $pos);
-            if (! $module = $this->getModule($name)) {
-                throw new Exception("A module with the name '$name' could not be found.");
+            $plugin = $this->getPlugin($name)
+            if (!$plugin) {
+                throw new Exception("A plugin with the name '$name' could not be found.");
             }
-            $base_ns = $module->getNamespace();
+            $base_ns = $plugin->getNamespace();
         } else {
-            $base_ns = $this->config['app_namespace_prefix'] ?: '';
+            $base_ns = $this->appNamespace;
         }
         
-        if ($this->config['namespaced_app']) {
+        if ($base_ns) {
             $controller = '\\Controller\\' . ltrim($controller, '\\') . 'Controller';
         } else {
             $controller = 'Controller_' . $controller . 'Controller';
         }
         $controller = $base_ns . $controller;
         $controller = ltrim($controller, '\\');
+        
+        $action = $action . 'Action';
 
         return array($controller, $action);
     }
 
+        /*
+        Event hooks, we will need to add them in, this is how others do it:
+        Slim
+            slim.before
+            slim.before.router
+            slim.before.dispatch
+            slim.after.dispatch
+            slim.after.router
+            slim.after
+        Zend Framework 2
+            bootstrap
+            route (does actual framework routing)
+            dispatch (does actual framework dispatching)
+            dispatch.error
+            finish
+        Symfony 2
+            kernel.request
+            kernel.controller
+            kernel.exception
+            kernel.view
+            kernel.response
+        */
     /**
-     * View a frontend page.
-     *
-     * @throws Exception
+     * Run the routing match and dispatch cycle.
      */
-    public function runFront()
-    {
-        $controller = $this->loadController('Page');
-        try {
-            if ($this->request->fetchVar('preview', false) && 
-                $theme = $this->request->fetchVar('theme', '')) {
-                if (!$this->userLoggedIn()) {
-                    throw new Exception("Not allowed to preview theme if not logged in", ERR_NOT_FOUND);
-                }
-                $this->view->setPaths($theme);
-            } else {
-                $this->view->setPaths($this->config['theme']);
-            }
-            $controller->viewAction();
-            $this->view->renderLayout();
-        } catch (Exception $e) {
-            $this->handleException($e);
-        }
-    }
-
-    /**
-     * Run the dispatch loop, calling the action controller and method for Admin section.
-     *
-     * @returm void
-     * @throws Exception
-     */
-    public function runAdmin()
+    public function run()
     {
         // Localize dependencies and make sure they are set.
-        $request = $this->getRequest();
-        $router = $this->getRouter();
-        $view = $this->getView();
+        $eventManager = $this->eventManager;
+        $request = $this->request;
+        $router = $this->router;
+        $view = $this->view;
+        
+        $event = new MvcEvent;
+        $event->setDispatcher($eventManager);
+        $event->setApplication($this);
 
         try {
-            $router->route();
+            $this->eventManager->dispatch('app.loaded', $event);
+            
+            $match = $router->match($request->rewrittenPath(), $request->method());
+            $event->matchedRoute($match);
+            $event->setName('app.routed');
+            $eventManager->dispatch('app.routed', $event);
+            
+            /*
+            if ($event->sendResponse()) {
+                return $this->response;
+            }
+            */
 
-            $controller = $this->loadController($router->getController());
+            $controller = $match->getController();
+            if (!is_callable($controller)) {
+                list($class, $action) = $this->resolveControllerSpec($controller);
+                $object = new $class($this);
+                $controller = array($object, $action);
+            }
 
-            $action = strtolower($router->getAction()) . 'Action';
-
-            $view->setPaths($router->getController());
+            $result = call_user_func($controller);
+            $event->dispatchResult($result);
+            $event->setName('app.dispatched');
+            $eventManager->dispach('app.dispatched', $event);
                 
-            if (method_exists($controller, $action)) {
-                $controller->$action();
-            } else {
-                throw new Exception("Not a valid action.", ERR_NOT_FOUND);
-            }
-
-            if (!$request->isAsync()) {
-                $view->renderLayout();
-            }
-        } catch (Exception $e) {
-            $this->handleException($e);
+          } catch (Exception $e) {
+            $this->handleException($e, $event);
         }
-    }
-
-    /**
-     * Load a controller class and populate it with the proper dependencies.
-     * @param string $controller
-     * @return ControllerAbstract
-     */
-    public function loadController($controller)
-    {
-        $filename = ucfirst($controller) . 'Controller';
-        $core_file = APP_PATH . 'Controllers' . DS . $filename . '.php';
-        $plugin_file = PLUGIN_PATH . $controller . DS . $filename . '.php';
         
-        if (file_exists($core_file)) {
-            include_once $core_file;
-            $class = 'Tm_' . $filename;
-        } elseif (file_exists($plugin_file)) {
-            include_once $plugin_file;
-            $class = $filename;
-        } else {
-            throw new Exception("Controller class file '$filename' not found.", ERR_NOT_FOUND);
-        }
-
-        return new $class($this, $this->getRequest(), $this->getView());
+        return $this->reponse;
     }
 
     /**
-     * Load a model class and populate it with proper dependencies.
-     * @param string $model
-     * @return ModelAbstract
-     */
-    public function loadModel($model)
-    {
-        $filename = ucfirst($model);
-        $file = APP_PATH . 'Models' . DS . $filename . '.php';
-        $class = 'Tm_' . $filename;
-        if (file_exists($file)) {
-            include_once $file;
-        } else {
-            throw new Exception("Model class '$class' not found.", ERR_FATAL);
-        }
-
-        return new $class($this);
-    }
-
-    /**
-     * Load a plugin class and populate it with proper dependencies.
-     * @param string $name
-     * @return
-     */
-    public function loadPlugin($name)
-    {
-    }
-
-    /**
-     * Handle exceptions called during dispatch/action cycle and display error page to user.
+     * Handle exceptions called during routing/dispatch cycle and display error page to user.
      * @param Exception $e
-     * @return void
+     * @param MvcEvent $event
      */
-    public function handleException($e)
+    public function handleException(Exception $e, MvcEvent $event = null)
     {
-        $controller = $this->loadController('error');
-        $controller->defaultAction($e);
-        $this->view->setPaths('error');
-        $this->view->addStylesheet('main.css');
-        $this->view->current_lang = 'en_US';
-        $this->view->renderLayout('error.php');
-        exit;
-        // Render
-        // echo $e; // Force __toString()
-    }
-
-    public function userLoggedIn()
-    {
-        if (!isset($this->user)) {
-            $this->user = $this->loadModel('User');
-            if (isset($_COOKIE[AUTH_COOKIE_NAME]) &&
-                $this->authenticateCookie($_COOKIE[AUTH_COOKIE_NAME])) {
-                $return = true;
-            } else {
-                $return = false;
-            }
-            Tm_Locale::setup($this->getUser(), $this->getConfig());
-            return $return;
+        if (is_null($event)) {
+            $event = new MvcEvent;
+            $event->setDispatcher($this->eventManager);
+            $event->setAppication($this);
         }
-        return ($this->user->id != 'ANONYMOUS');
-    }
-
-    /**
-     * Authenticate the user by checking the authentication cookie.
-     * @param string $cookie Authentication cookie value.
-     * @return bool
-     */
-    public function authenticateCookie($cookie)
-    {
-        $parts = explode(':', $cookie);
-        if (count($parts) != 3) {
-            return false;
+        $event->setName('app.exception');
+        $this->eventManager->dispatch('app.exception', $event);
+        
+        $controller = $this->errorController();
+        if (!is_callable($controller)) {
+            list($class, $action) = $this->resolveControllerSpec($controller);
+            $object = new $class($this);
+            $controller = array($object, $action);
         }
-
-        list($username, $expiration, $cookie_hmac) = $parts;
-
-        $expired = $expiration;
-
-        // Allow a grace period for POST and AJAX requests
-        if ($this->request->isPost() || $this->request->isAsync()) {
-            $expired += 1800;
-        }
-
-        if ($expired < time()) {
-            return false;
-        }
-
-        $input = $username . ':' . $expiration . ':' . $_SERVER['REMOTE_ADDR'];
-
-        $key = hash_hmac('sha1', $input, COOKIE_SALT);
-        $calc_hmac = hash_hmac('sha1', $input, $key);
-
-        if ($cookie_hmac == $calc_hmac) {
-            if ($this->user->findByUsername($username)) {
-                return true;
-            }
-        }
-        return false;
+        
+        call_user_func_array($controller, array($e));
     }
 
     /**
