@@ -1,3 +1,3 @@
-[submodule "lib/Symfony/EventDispatcher"]
-	path = lib/Symfony/EventDispatcher
+[submodule "lib/Symfony/Component/EventDispatcher"]
+	path = lib/Symfony/Component/EventDispatcher
 	url = git://github.com/symfony/EventDispatcher.git
