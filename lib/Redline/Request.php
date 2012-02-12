@@ -166,6 +166,16 @@ class Request
     }
 
     /**
+     * Merge in parameters pulled from routed URL into query parameters.
+     *
+     * @param array
+     */
+    public function mergeQueryParams(array $params)
+    {
+        $this->query = array_replace($this->query, $params);
+    }
+
+    /**
      * Access one of or all the request body parameters.
      *
      * Do not pass a key name to retreive all the body parameters.
@@ -285,7 +295,7 @@ class Request
      * 
      * @return string
      */
-    public function requestPath()
+    public function rewrittenPath()
     {
         return $this->requestPath;
     }
@@ -466,7 +476,7 @@ class Request
      * @param array $server
      * @return void
      */
-    protected function setHeaders($server)
+    protected function setHeaders(&$server)
     {
         foreach ($server as $key => $value) {
             $key = $this->normalizeHeaderName($key);
@@ -486,7 +496,7 @@ class Request
      * @param array $server An array like PHP's $_SERVER superglobal.
      * @return void
      */
-    protected function setUrlData($server)
+    protected function setUrlData(&$server)
     {
         if (isset($server['SERVER_NAME'])) {
             $this->hostName = $server['SERVER_NAME'];
@@ -534,8 +544,8 @@ class Request
             $this->queryString = $server['QUERY_STRING'];
         }
 
-        $request_path = substr($request_uri, strlen($this->basePath));
-        $this->requestPath = '/' . ltrim($request_path, '/');
+        $rewritten_path = substr($request_uri, strlen($this->basePath));
+        $this->rewrittenPath = '/' . ltrim($rewritten_path, '/');
     }
 
     /**

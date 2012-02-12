@@ -26,7 +26,7 @@ namespace Redline\Router;
  *
  * @package RedlineFramework
  */
-class Route
+class Route implements RouteInterface
 {
 	/**
 	 * Unique name or identifier of this route
@@ -65,22 +65,10 @@ class Route
 	protected $methods;
 
     /**
-     * Module in which routed controller is located, leave blank for 'app'.
+     * Controller specification indicating class and method the be invoked.
      * @var string
      */
-    protected $module;
-
-    /**
-     * Controller class which method to be invoked is located.
-     * @var string
-     */
-    protected $class;
-
-    /**
-     * Action which is to be invoked when route is matched.
-     * @var string
-     */
-    protected $action;
+    protected $controller;
 
 	/**
 	 * Array of parameter names and values captured by routing match.
@@ -113,24 +101,19 @@ class Route
         $this->path = $path;
 
         // Hash char must not be 1st char so we accept 0 as false instead of using === false
-        if (!strpos($controller_spec, '#')) {
+        if (!is_callable($controller_spec) && substr_count($controller_spec, '#') !== 1) {
             throw new Exception("The controller specification '$controller_spec' does not contain a controller class and action seperated by the '#' character.");
         }
-        list($controller, $action) = explode('#', $controller_spec);
-        
-        // Colon must not be 1st char, so we accept 0 as false again.
-        if (strpos($controller, ':')) {
-            list($module, $controller) = explode(':', $controller);
-        } else {
-            $module = '';
-        }
-        $this->module = $module;
-        $this->controller = $controller;
-        $this->action = $action;
+        $this->controller = $controller_spec;
 
-        if (empty($name)) {
-            $name = $controller . "_" . $action;
-            $name = (empty($module)) ? $name : $module . "_" . $name;
+        if (empty($name) && !is_callable($controller_spec)) {  
+            list($controller, $action) = explode('#', $controller_spec);
+
+            if (strpos($controller, '@') === 0) {
+                list($module, $controller) = explode('\\', $controller, 2);
+            }
+
+            $name = str_replace('\\', '_', $controller) . '_' . $action;
         }
 
         if (isset($options['name_prefix'])) {
@@ -159,10 +142,9 @@ class Route
                     $params[$key] = $val;
                 }
             }
-            // merge in module, controller & action for fetch them separatly?
-            // if there are no params in route (static) but it still matches
-            // calling code may think the empty array is false!
-            return $params;
+            $this->params = $params;
+
+            return true;
         }
         return false;
     }
@@ -175,7 +157,7 @@ class Route
      * 
      * @return void
      */
-    public function compilePattern()
+    protected function compilePattern()
     {
         $pattern = str_replace(')', ')?' $this->path);
         preg_match_all('@:([\w]+)@', $pattern, $param_names, PREG_PATTERN_ORDER);
@@ -253,6 +235,16 @@ class Route
     public function methods()
     {
         return $this->methods;
+    }
+
+    /**
+     * Return the controller specification string or callback represented by this route.
+     *
+     * @return string
+     */
+    public function getController()
+    {
+        return $this->controller;
     }
 
     /**

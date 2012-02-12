@@ -48,15 +48,9 @@ class Router extends RouteCollectionFactory
     
     /**
      * The controller/action to call when the root URL (homepage) is requested.
-     * @var string
+     * @var RootRoute
      */
-    protected $rootController;
-    
-    /**
-     * Default params to set when the root URL (homepage) is requested.
-     * @var array
-     */
-    protected $rootDefaults = array();
+    protected $root;
 
     /**
      * Cache of HTTP methods allowed on matched routes.
@@ -83,8 +77,7 @@ class Router extends RouteCollectionFactory
      */
     public function root($controller_spec, array $defaults = array())
     {
-        $this->rootController = $controller_spec;
-        $this->rootDefaults = $defaults;
+        $this->root = new RootRoute($controller_spec, $defaults);
     }
     
     /**
@@ -125,11 +118,18 @@ class Router extends RouteCollectionFactory
             $method = 'GET';
         }
 
+        if ($path == '/') {
+            if ($method != 'GET') {
+                throw new MethodNotAllowedExcpetion(array('GET', 'HEAD'));
+            }
+            return $this->root;
+        }
+
         if ($route = $this->matchCollection($path, $this->routes)) {
             return $route;
         }
 
-        throw 0 < count($this->allowed)
+        throw (count($this->allowed) > 0)
             ? new MethodNotAllowedException(array_unique(array_map('strtoupper', $this->allowed)))
             : new ResourceNotFoundException();
     }
@@ -179,6 +179,10 @@ class Router extends RouteCollectionFactory
      */
     public function pathFor($name, $params = array())
     {
+        if ($name == 'root') {
+            return '/';
+        }
+
         if (null === $route = $this->getRoute($name)) {
             throw new RuntimeException("A route with the name '$name' could not be found.");
         }

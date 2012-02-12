@@ -29,15 +29,6 @@ namespace Redline\Router;
 interface RouteInterface
 {
 	/**
-	 * Object constructor.
-     *
-     * @param string $path URI path specification to match against.
-     * @param string $controller Controller specification.
-	 * @param array $options Route options.
-	 */
-	public function __construct($path, $controller, array $options = array());
-
-	/**
 	 * Test whether given URL path matches the route.
 	 *
 	 * @param string $path URL path to test for match against.
@@ -61,12 +52,18 @@ interface RouteInterface
     public function name();
 
     /**
-     * Check whether any contained/child routes has this name.
+     * Return the HTTP methods allowed for this route.
      *
-     * @param string $name
-     * @return boolean
+     * @return array
      */
-    public function has($name);
+    public function methods();
+
+    /**
+     * Return the controller specification string or callback represented by this route.
+     *
+     * @return string
+     */
+    public function getController();
 
      /**
      * Retrieve the parameters captured from the URL pattern during the match.

@@ -441,6 +441,7 @@ class Application extends Vessel implements EventSubscriberInterface
             */
 
             $controller = $match->getController();
+            $request->mergeQueryParams($match->getParams());
             if (!is_callable($controller)) {
                 list($class, $action) = $this->resolveControllerSpec($controller);
                 $object = new $class($this);
