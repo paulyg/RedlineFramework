@@ -96,6 +96,18 @@ class Response
     protected $headers = array();
 
     /**
+     * Cookies to send with response.
+     * @var array
+     */
+    protected $cookies = array();
+
+    /**
+     * Special list of Cache-Control header values.
+     * @var array
+     */
+    protected $cache_control_headers = array();
+
+    /**
      * The reponse body.
      * @var string
      */
@@ -198,7 +210,19 @@ class Response
     {
         return $this->headers;
     }
-    
+
+    /**
+     * Unset a header field.
+     * 
+     * @param string $name
+     */
+    public function removeHeader()
+    {
+        $name = $this->normalizeHeaderName($name);
+        if (isset($this->headers[$name])) {
+            unset($this->headers[$name];
+        }
+    }    
 
     public function setCookie()
     {
@@ -354,17 +378,59 @@ class Response
     }
 
     /* Date/Cache helpers */
-    public function expire(\DateTime $time) {}
+    public function setExpires(\DateTime $time)
+    {
+        if ($time == null) {
+            $this->removeHeader('Expires');
+        } else {
+            $time = clone $time;
+            $time->setTimezone(new \DateTimeZone('UTC'));
+            $this->setHeader('Expires', $time->format('D, d M Y H:i:s').' GMT');
+        }
+    }
 
-    public function lastModified(\DateTime $time) {}
+    public function setLastModified(\DateTime $time)
+    {
+        if ($time == null) {
+            $this->removeHeader('Last-Modified');
+        } else {
+            $time = clone $time;
+            $time->setTimezone(new \DateTimeZone('UTC'));
+            $this->setHeader('Last-Modified', $time->format('D, d M Y H:i:s').' GMT');
+        }
+    }
 
-    public function setPublic() {}
+    public function setAsPublic()
+    {
+        $this->cacheControlHeaders['private'] = false;
+        $this->cacheControlHeaders['public'] = true;
+        $this->cacheControlHeaders['no-cache'] = false;
+        $this->cacheControlHeaders['no-store'] = false;
+    }
 
-    public function setPrivate() {}
+    public function setAsPrivate()
+    {
+        $this->cacheControlHeaders['private'] = true;
+        $this->cacheControlHeaders['public'] = false;
+        $this->cacheControlHeaders['no-cache'] = true;
+        $this->cacheControlHeaders['no-store'] = false;        
+    }
 
-    public function cacheable() {}
+    public function setAsCacheable()
+    {
+        $this->cacheControlHeaders['private'] = false;
+        $this->cacheControlHeaders['public'] = true;
+        $this->cacheControlHeaders['no-cache'] = false;
+        $this->cacheControlHeaders['no-store'] = false;
+    }
 
-    public function notCacheable() {}
+    public function setAsNotCacheable()
+    {
+        $this->cacheControlHeaders['private'] = true;
+        $this->cacheControlHeaders['public'] = false;
+        $this->cacheControlHeaders['no-cache'] = true;
+        $this->cacheControlHeaders['no-store'] = true;        
+    }
 
     /**
      * CamelCases HTTP header names and removes any spaces and _, converting to -.

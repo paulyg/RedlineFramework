@@ -484,26 +484,4 @@ class Application extends Vessel implements EventSubscriberInterface
         
         call_user_func_array($controller, array($e));
     }
-
-    /**
-     * Send headers for a cachable file.
-     * @param int $expires Unix timestamp representing the expiration of the page cache.
-     * @return void
-     */
-    public static function cacheHeaders($expires)
-    {
-        header('Expires: ' . gmdate('D, d M Y H:i:s', $expires) . ' GMT');
-    /*  header('Last-Modified: ' . Tm_DateTime::toHttpDate($lastmodified));   */
-    }
-
-    /**
-     * Send headers to prevent caching of the page or data.
-     * @return void
-     */
-    public static function noCacheHeaders()
-    {
-        header('Cache-Control: no-cache, no-store, must-revalidate');
-        header('Pragma: no-cache');
-        header('Expires: 0');
-    }
 }
