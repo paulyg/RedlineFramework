@@ -97,7 +97,7 @@ class Config implements ArrayAccess, IteratorAggregate
 
     /**
      * Add a config value without overwriting an existing one.
-   	 * @param string $name config key
+     * @param string $name config key
 	 * @param mixed $value config value
      * @throws Exception When key already exists
      */
@@ -147,7 +147,7 @@ class Config implements ArrayAccess, IteratorAggregate
         if (substr($pattern, -1) == '*') {
             $pattern = substr($pattern, 0, -1);
         }
-        if (substr($pattern, -1 != '.')) {
+        if (substr($pattern, -1) != '.')) {
             $pattern .= '.';
         }
         $len = strlen($pattern);

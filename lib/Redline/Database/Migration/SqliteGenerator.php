@@ -307,30 +307,11 @@ class Table
 	}
 
 	/**
-	 * Create a new table.
-	 * @param array $columns
-	 * @param bool $ifnotexists
-	 * @param string $constraint
-	 * @return bool
+	 * @inheritdoc
 	 */
-	public function create(array $columns, $ifnotexists = false, $constraint = '')
+	public function createTableHead($name, $ifnotexists = false)
 	{
-		$sql = "CREATE TABLE ";
-		if ($ifnotexists) {
-			$sql .= "IF NOT EXISTS ";
-		}
-		$sql .= "\"{$this->name}\" (\n";
-		foreach ($columns as $column) {
-			$sql .= $this->createColumnStatement($column) . ",\n";
-		}
-		if (!empty($constraint)) {
-			$sql .= "CONSTRAINT $constraint\n)";
-		} else {
-			$sql = rtrim($sql);
-			$sql = rtrim($sql, ',');
-			$sql .= "\n)";
-		}
-		return $this->con->exec($sql);
+		return "CREATE TABLE " . (($ifnotexists) ? "IF NOT EXISTS " : '') . "\"$name\" (\n";
 	}
 
 	/** 
@@ -342,14 +323,15 @@ class Table
 	 * @param array $def
 	 * @return string
 	 */
-	public function createColumnStatement(array $def)
+	public function createTableAddColumn($name, array $def)
 	{
 		$defaults = array(
-			'pk' => '',
-			'autoinc' => '',
-			'notnull' => '',
-			'unique' => '',
+			'primary_key' => false,
+			'auto_increment' => false,
+			'notnull' => false,
+			'unique' => false,
 			'default' => '',
+            'charset' => '',
 			'collate' => '',
 			'check' => ''
 		);
@@ -452,7 +434,7 @@ class Table
 	{
 		$cols = $this->getColumnMetaData();
 		if (!isset($cols[$column])) {
-			throw new Exception("Column &quot;$column&quot; does not exist in the table.");
+			throw new Exception("Column "$column" does not exist in the table.");
 		}
 		$col_quoted = preg_quote($column, '/');
 

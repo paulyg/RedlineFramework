@@ -1,0 +1,139 @@
+=SQL for Database\Migration component=
+
+==Create Table==
+CREATE TABLE [IF NOT EXISTS] (
+    <columns>
+    <table_constraints>
+) <table options>
+
+Column options:
+* type
+* native_type
+* primary_key
+* unique
+* not_null
+* default
+* collation
+* charset
+
+===MySql===
+* MySql column definition: data_type [NOT NULL | NULL] [DEFAULT default_value] [AUTO_INCREMENT] [UNIQUE [KEY] | [PRIMARY] KEY] [COMMENT 'string']
+* CHARACTER SET charset_name and COLLATE collation only apply to *TEXT & *CHAR & ENUM types
+* In addition to columns allows:
+** PRIMARY KEY [index_type] (index_col_name,...) [index_option]
+** {INDEX|KEY} [index_name] [index_type] (index_col_name,...) [index_option]
+** UNIQUE [INDEX|KEY] [index_name] [index_type] (index_col_name,...) [index_option] ...
+** {FULLTEXT|SPATIAL} [INDEX|KEY] [index_name] (index_col_name,...) [index_option] ...
+** FOREIGN KEY [index_name] (index_col_name,...) reference_definition (only supported in InnoDB
+* MySql automatically creates an index name when you define an index with the table and don't give it a name. It is the same as the fist column name with an optional suffix (_2, _3) to make it unique. Use "SHOW INDEX FROM tbl_name" to see indexes on a table.
+* Table options:
+** ENGINE [=] engine_name
+** AUTO_INCREMENT [=] value
+** AVG_ROW_LENGTH [=] value
+** [DEFAULT] CHARACTER SET [=] charset_name
+** CHECKSUM [=] {0 | 1}
+** [DEFAULT] COLLATE [=] collation_name
+** COMMENT [=] 'string'
+** CONNECTION [=] 'connect_string'
+** DATA DIRECTORY [=] 'absolute path to directory'
+** DELAY_KEY_WRITE [=] {0 | 1}
+** INDEX DIRECTORY [=] 'absolute path to directory'
+** INSERT_METHOD [=] { NO | FIRST | LAST }
+** KEY_BLOCK_SIZE [=] value
+** MAX_ROWS [=] value
+** MIN_ROWS [=] value
+** PACK_KEYS [=] {0 | 1 | DEFAULT}
+** PASSWORD [=] 'string'
+** ROW_FORMAT [=] {DEFAULT|DYNAMIC|FIXED|COMPRESSED|REDUNDANT|COMPACT}
+** TABLESPACE tablespace_name [STORAGE {DISK|MEMORY|DEFAULT}]
+** UNION [=] (tbl_name[,tbl_name]...)
+
+===PostgreSql===
+* PostgreSql column definition: data_type [COLLATE collation] [column_constraint]
+* Column constraints are: [CONSTRAINT constraint_name] { NOT NULL | NULL | CHECK (expression) | DEFAULT default_expr | UNIQUE index_parameters | PRIMARY KEY index_parameters |
+* Table constraints are: [CONSTRAINT constraint_name] { CHECK (expression) | UNIQUE (column_name [, ... ]) | PRIMARY KEY (column_name [, ... ]) | FOREIGN KEY ... (won't support)
+
+
+==Create Index==
+CREATE INDEX...
+
+Index options:
+* name
+* qualifier [primary_key|unique|fulltext]
+* columns (array)
+
+===MySql===
+CREATE [ONLINE|OFFLINE] [UNIQUE|FULLTEXT|SPATIAL] INDEX index_name
+    [USING {BTREE | HASH}] ON tbl_name (col_name [(length)] [ASC | DESC],...)
+===PostgreSql===
+CREATE [UNIQUE] INDEX [CONCURRENTLY] [name] ON table [USING method]
+    ( {column|(expression)} [COLLATE collation] [ASC|DESC] [NULLS {FIRST|LAST}] [, ...] )
+methods: btree, hash, gist, and gin
+
+
+==Drop Table==
+DROP TABLE [IF EXISTS] name [CASCADE|RESTRICT]
+===MySql===
+* CASCADE & RESTRICT does nothing
+
+==Drop Index==
+===MySql===
+* DROP INDEX index_name ON table_name
+===PostgreSql===
+* DROP INDEX [IF EXISTS] name [, ...] [CASCADE|RESTRICT]
+
+
+==Alter Table==
+ALTER TABLE table_name ... (this is where it gets complicated)
+
+ADD COLUMN options: same as CREATE TABLE
+
+ALTER COLUMN
+* newName
+* type
+* native_type
+* unique
+* not_null
+* default
+* collation
+* charset
+
+DROP COLUMN
+
+===MySql===
+* ALTER TABLE name
+** ADD [COLUMN] col_name column_definition [FIRST | AFTER col_name]
+** ADD [COLUMN] (col_name column_definition,...)
+** ADD {INDEX|KEY} [index_name] [index_type] (index_col_name,...) [index_option] ...
+** ADD [CONSTRAINT [symbol]] PRIMARY KEY [index_type] (index_col_name,...) [index_option] ...
+** ADD [CONSTRAINT [symbol]] UNIQUE [INDEX|KEY] [index_name] [index_type] (index_col_name,...) [index_option] ...
+** ADD FULLTEXT [INDEX|KEY] [index_name] (index_col_name,...) [index_option] ...
+** ADD SPATIAL [INDEX|KEY] [index_name] (index_col_name,...) [index_option] ...
+** ADD [CONSTRAINT [symbol]] FOREIGN KEY [index_name] (index_col_name,...) reference_definition
+** ALTER [COLUMN] col_name {SET DEFAULT literal | DROP DEFAULT}
+** CHANGE [COLUMN] old_col_name new_col_name column_definition [FIRST|AFTER col_name]
+** MODIFY [COLUMN] col_name column_definition [FIRST | AFTER col_name]
+** DROP [COLUMN] col_name
+** DROP PRIMARY KEY
+** DROP {INDEX|KEY} index_name
+** DROP FOREIGN KEY fk_symbol
+** RENAME [TO] new_tbl_name
+** ORDER BY col_name [, col_name] ...
+** CONVERT TO CHARACTER SET charset_name [COLLATE collation_name]
+** [DEFAULT] CHARACTER SET [=] charset_name [COLLATE [=] collation_name]
+
+===PostgreSql===
+* ALTER TABLE name RENAME TO new_name -OR-
+* ALTER TABLE name SET SCHEMA new_schema -OR-
+* ALTER TABLE [ ONLY ] name [ * ] RENAME [ COLUMN ] column TO new_column -OR-
+* ALTER TABLE [ ONLY ] name [ * ]
+** ADD [COLUMN] column data_type [COLLATE collation] [column_constraint [ ... ]]
+** DROP [COLUMN] [IF EXISTS] column [RESTRICT|CASCADE]
+** ALTER [COLUMN] column [SET DATA] TYPE data_type [COLLATE collation] [USING expression]
+** ALTER [COLUMN] column SET DEFAULT expression
+** ALTER [COLUMN] column DROP DEFAULT
+** ALTER [COLUMN] column {SET|DROP} NOT NULL
+** ADD table_constraint [NOT VALID]
+** ADD [CONSTRAINT constraint_name] {UNIQUE|PRIMARY KEY} USING INDEX index_name
+** VALIDATE CONSTRAINT constraint_name
+** DROP CONSTRAINT [IF EXISTS] constraint_name [RESTRICT|CASCADE]

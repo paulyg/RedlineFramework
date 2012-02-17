@@ -22,6 +22,7 @@
 namespace Redline\Database;
 
 use Redline\Database\Migration;
+// Will Migration namespace and Migration class name conflict?
 
 /**
  * Provides simplified interface for creating/modifying/deleting database tables, columns, and indicies.
@@ -123,6 +124,8 @@ class Migration
 
 	public function addIndex($table, $name)
     {
+        // MySQL is the only one to support creating index as part of a CREATE/ALTER TABLE. SQLite & Postgres go
+        // through CREATE INDEX. Should we just create a CreateIndex object?
         $action = 'create_index_' . $table . '_' . $name;
         if (isset($this->actions[$action])) {
             throw new InvalidArgumentException("A definition to create index '$name' on table '$table' already exists.");
@@ -140,6 +143,7 @@ class Migration
 
 	public function removeIndex($table, $name)
     {
+        // Same as above, dropping index as part of alter table is MySQL specific. Shouls be create a DropTable object here?
         $action = 'remove_index_' . $table . '_' . $name;
         if (isset($this->actions[$action])) {
             throw new InvalidArgumentException("A command to remove index '$name' on table '$table' already exists.");

@@ -38,7 +38,13 @@ class CreateTable
 	 * List of columns to add to the table.
 	 * @var array
 	 */
-	protected $actions = array();
+	protected $columns = array();
+    
+    /**
+     * List of indexes to add to the table.
+     * @var array
+     */
+    protected $indexes = array();
 
 	/**
 	 * Object constructor.
@@ -101,13 +107,12 @@ class CreateTable
 	{
         if (isset($definition['name']) {
             $name = $definition['name'];
-            $action = 'add_index_' . $name;
-            if (isset($this->actions[$action])) {
+            if (isset($this->indexes[$name])) {
                 throw new InvalidArgumentException("Index '$name' already defined for table '{$this->name}'.");
             }
-            $index = $this->actions[$action] = new AddIndex($definition);
+            $index = $this->indexes[$name] = new AddIndex($definition);
         } else {
-            $index = $this->actions[] = new AddIndex($definition);
+            $index = $this->indexes[] = new AddIndex($definition);
         }
 
         return $index;
@@ -115,5 +120,11 @@ class CreateTable
 
     public function getSql($generator)
     {
+        // Get create table head or opening
+        // get sql from each column
+        // get sql table closing statement
+        // get sql from each index
+        // MySQL is only one of three that supports creating index during create table,
+        // other two use CREATE INDEX statement
     }
 }
