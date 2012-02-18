@@ -1,31 +1,32 @@
-==Redline Framework==
+=Redline Framework=
 
-This is my attempt at writing my own web framework. I've been working on it off and on in conjunction with another project. I've looked at or played with most of the popular PHP frameworks out there and find them to be too big or too small. The goal with Redline is to be in the middle. I call it the Goldilocks Principle.
+Welcome to Redline Framework, a "middle sized" web application framework written in PHP. This project came out of my attempt to write a simple and modern CMS for small and relatively static websites. Both projects are hobbies done //"in my spare time"//, I don't write code for a living. I call it //medium sized// because //full stack// frameworks like Zend and Symfony are way too big and //microframeworks// like Slim and Fat Free are too limited. So the goal with Redline is to be in between them feature wise. I call it the //Goldilocks Principle//.
 
-The end goal is to have the following modules/classes:
-* Application (master class for interacting with framework)
-* Request
-* Response
-* Routing
-* View w/ Helpers
-* Loader (Autoloading & plugin/module management)
-* Database Abstraction based on PDO
+Note that Codeignitor and it's derivatives are //medium sized// as well, but are not written to take advantage of PHP 5.2 and PHP 5.3 features (except for maybe Fuel). Another goal of Redline is to make use of new PHP features and the {{{SPL}}} where it makes sense.
+
+A third goal is to make it easy to adapt the framework to be used as the base of a redistributed software that has plugins. Think like Wordpress plugins but using MVC features. Symfony2 and ZF2's bundle/module structure make this possible but no one is doing it well in the  //medium size// space.
+
+The framework is very much a work in progress piece of code. I'd like to use components from other frameworks were I can but often find them needlessly complex. I want to keep everyting autoloadable by either a PSR-0 or PEAR/Zend style autoloader for maximum portability. I am using Symfony's UniversalClassLoader for this.
+
+The framework can be broken down into the following components.
+* Application - master class for interacting with framework
+* HTTP Request & Response classes - abstracting the various superglobals and functions and diverse $_SERVER variables.
+* Routing - my goal is to create an expressive syntax the isn't cumbersome to type, like Ruby on Rails
+* View w/ Helpers - PHP file templates only
+* Database Abstraction based on PDO - this is a light revision of my DBALite library
 * ActiveRecord
-* Database Migrations via command lines
-* AbstractController
-* Validation/Sanitizer
+* Database Migrations via command line - very much a work in progress right now, I kinda wish I could put a CLI interface behind Doctrine {{{DBAL}}} w/o bringing the whole DBAL with me.
+* Validation/Sanitizer - wrapper around PHP's {{{filter}}} extension (so you don't have to mess with FILTER_* constants), plus UTF-8 string validation, stripping strings to be URL path safe and filesystem safe, and possibly a way to add your own validators
 * Form automation
-* Events/hooks (using Symfony\Component\EventDispatcher for now)
-* HTTP Client
+* Events/hooks (using Symfony\Component\EventDispatcher right now)
+* HTTP Client (leaning towards using PEAR2\Http_Request for this)
 * Caching (HTML output) & static file generation
-
-The following would be under consideration if I ever get the above done.
-* Filesystem wrapper
-* Locale/I18n
-* Config
-* Logging
-* Session wrapper
-* Mail
-* Auth (OpenID/Oauth)
+* Filesystem wrapper (using Symfony\Component\Filesystem for this)
+* Locale/I18n - not even started yet
+* Session wrapper - not even started yet
+* Config store class
+* Logging - much longer term, what lightweight solutions are out there
+* Mail - much longer term, I only care about sending text & html messages, all libs are overcomplicated and large or PHP4 era
+* Auth (OpenID/Oauth) - what solutions are out there? I really don't want to write this stuff myself
 
 Nothing is guarenteed to work and there are no tests yet so use at your own risk.
